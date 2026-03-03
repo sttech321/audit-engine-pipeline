@@ -21,7 +21,6 @@ from app.models.common_schemas import (
 )
 from app.services.pdf_generator import get_pdf_generator, generate_pdf_html, PDF_AVAILABLE
 from app.services.svg_generator import generate_penrose_svg, generate_minimal_svg
-from app.services.ledger_service import get_ledger
 
 
 router = APIRouter()
@@ -225,43 +224,17 @@ async def get_ledger_chain(
     limit: int = Query(100, ge=1, le=1000, description="Maximum entries to return")
 ):
     """
-    Get ledger chain entries.
+    Ledger endpoint is disabled under canonical RIM-OS integration.
     
-    Args:
-        start: Starting sequence number
-        limit: Maximum number of entries
-        
-    Returns:
-        List of ledger entries
+    All authoritative ledger information now lives solely inside the
+    RIM-OS v2 engine and is exposed per-audit via ExtendedAuditResult.ledger.
     """
-    ledger = get_ledger()
-    chain = ledger.export_chain()
-    
-    return {
-        "chain_length": len(chain),
-        "entries": chain[start:start + limit],
-        "integrity_valid": ledger.verify_chain_integrity()
-    }
+    raise HTTPException(status_code=410, detail="Ledger API is deprecated under RIM-OS v2.")
 
 
 @router.get("/ledger/{sequence}")
 async def get_ledger_entry(sequence: int):
     """
-    Get a specific ledger entry by sequence number.
-    
-    Args:
-        sequence: The sequence number
-        
-    Returns:
-        Ledger entry details
+    Ledger entry endpoint is disabled under canonical RIM-OS integration.
     """
-    ledger = get_ledger()
-    entry = ledger.get_entry(sequence)
-    
-    if not entry:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Ledger entry not found: sequence {sequence}"
-        )
-    
-    return entry.to_dict()
+    raise HTTPException(status_code=410, detail="Ledger API is deprecated under RIM-OS v2.")

@@ -32,47 +32,12 @@ The PASS97 backend audit pipeline has comprehensive test coverage across all maj
 
 ---
 
-## 1. PASS97 5-Stage Audit Pipeline
+## 1. Canonical RIM-OS v2 Audit Engine
 
-The core audit pipeline implements PASS97 specification §2.1-2.5 with full test coverage:
-
-### Stage 1: Gödel Fingerprint (§2.1)
-| Scenario | Test | Status |
-|----------|------|--------|
-| Deterministic fingerprint for identical content | `test_godel_fingerprint_deterministic` | ✅ |
-| Unique fingerprints for different content | `test_godel_fingerprint_different_content` | ✅ |
-| Unchanged behavior (regression) | `test_godel_fingerprint_unchanged` | ✅ |
-
-### Stage 2: p-adic Lift (§2.2)
-| Scenario | Test | Status |
-|----------|------|--------|
-| Returns 8 coefficients | `test_padic_lift_length` | ✅ |
-| Integer coefficient types | `test_padic_lift_unchanged` | ✅ |
-
-### Stage 3: NTT Fingerprint (§2.3)
-| Scenario | Test | Status |
-|----------|------|--------|
-| Deterministic NTT computation | `test_ntt_fingerprint_deterministic` | ✅ |
-| Unchanged behavior (regression) | `test_ntt_fingerprint_unchanged` | ✅ |
-
-### Stage 4: KAG Separability (§2.4)
-| Scenario | Test | Status |
-|----------|------|--------|
-| Score in valid range [0, 1] | `test_kag_score_range` | ✅ |
-| Returns (score, hash) tuple | `test_kag_returns_tuple` | ✅ |
-| Correct weight values (0.30/0.40/0.30) | `test_weight_values` | ✅ |
-| 25% bias multiplier | `test_bias_multiplier` | ✅ |
-| 64-char SHA-256 kag_hash | `test_kag_returns_tuple` | ✅ |
-
-### Stage 5: Penrose P3 Mapping (§2.5)
-| Scenario | Test | Status |
-|----------|------|--------|
-| 5-fold pentagrid symmetry | `test_pentagrid_sectors` | ✅ |
-| Pentagrid angles (k × 2π/5) | `test_pentagrid_angles_formula` | ✅ |
-| Sector in range {0,1,2,3,4} | `test_penrose_returns_sector_in_range` | ✅ |
-| Theta matches pentagrid angle | `test_penrose_theta_is_pentagrid_angle` | ✅ |
-| Tau included in result | `test_penrose_has_tau` | ✅ |
-| Tile hash (16-char) | `test_penrose_has_tile_hash` | ✅ |
+The legacy PASS97 5-stage mathematical pipeline has been replaced by the
+canonical RIM-OS v2 engine. All low-level mathematical operations now live
+exclusively in `rim_os_v2.py`, and the backend treats that module as an
+immutable dependency.
 
 ---
 
@@ -278,14 +243,15 @@ The core audit pipeline implements PASS97 specification §2.1-2.5 with full test
 ## 9. PASS97 Compliance Features
 
 ### Ledger Chaining
-| Scenario | Test | Status |
-|----------|------|--------|
-| Chain creation | `test_ledger_chain_creation` | ✅ |
-| Entry addition | `test_ledger_add_entry` | ✅ |
-| ledger_prev computation | `test_ledger_prev_computed` | ✅ |
-| ledger_next update | `test_ledger_next_updated` | ✅ |
-| Chain integrity verification | `test_ledger_chain_integrity` | ✅ |
-| audit_content_sha256 determinism | `test_audit_content_sha256` | ✅ |
+
+Ledger chaining is now provided exclusively by the RIM-OS v2 engine via
+its internal `build_ledger` function. The backend treats the following
+fields as read-only outputs of the canonical engine:
+
+- `ledger.events_hash`
+- `ledger.prev_state`
+- `ledger.next_state_hash`
+- `integrity.audit_content_sha256`
 
 ### Risk Assessment
 | Scenario | Test | Status |
@@ -359,15 +325,10 @@ Full regression coverage ensures no breaking changes:
 
 ## Pipeline Stage Verification Details
 
-The pipeline implements the following verification checks (from [audit_pipeline.py](app/services/audit_pipeline.py)):
-
-| Check Name | Stage | Implementation |
-|------------|-------|----------------|
-| Signature Valid | Stage 1 | Gödel fingerprint > 1 billion |
-| Hash Match | Stage 2 | p-adic coefficients non-zero, spread ≥ 20 |
-| NTT Integrity | Stage 3 | NTT entropy bits ≥ 12, byte diversity ≥ threshold |
-| KAG Separability | Stage 4 | KAG score ≥ MIN_KAG_SCORE |
-| Structure Intact | Stage 5 | Penrose sector ≠ 0, r ≥ 0.05, KAG passes |
+Low-level verification checks are now wholly encapsulated inside the
+RIM-OS v2 engine and are not reimplemented in the backend. The backend
+only consumes high-level fields from `report["summary"]`, `report["ledger"]`,
+and `report["integrity"]`.
 
 ---
 

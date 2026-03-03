@@ -3,12 +3,14 @@ Tests for SHA-256 hash computation.
 These tests verify that hashing behavior is preserved and consistent.
 """
 import hashlib
+import os
+import tempfile
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.audit_pipeline import process_audit_artifact
+from app.services.rim_wrapper import run_rim_audit
 from app.services.file_validation import compute_file_hash
 from tests.conftest import make_file
 
@@ -70,32 +72,53 @@ def test_hash_empty_content():
 
 # ─── Pipeline Hash Tests ─────────────────────────────────────────────────────
 
-def test_pipeline_hash_correct(sample_valid_content):
-    """Pipeline should compute correct SHA-256 hash."""
-    expected = hashlib.sha256(sample_valid_content).hexdigest()
-    
-    kpis, verification, file_hash = process_audit_artifact(
-        sample_valid_content, 
-        "test.rim95"
-    )
-    
-    assert file_hash == expected
+def test_rimos_audit_content_hash_deterministic(sample_valid_content):
+    """RIM-OS audit_content_sha256 should be deterministic for the same path+content."""
+    suffix = ".rim95"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        tmp.write(sample_valid_content)
+        tmp_path = tmp.name
+        tmp.close()
+
+        report1 = run_rim_audit(tmp_path)
+        report2 = run_rim_audit(tmp_path)
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+
+    integrity1 = report1.get("integrity", {}) or {}
+    integrity2 = report2.get("integrity", {}) or {}
+    h1 = integrity1.get("audit_content_sha256", "")
+    h2 = integrity2.get("audit_content_sha256", "")
+    assert h1 and h1 == h2
 
 
-def test_pipeline_hash_deterministic(sample_valid_content):
-    """Pipeline hash should be deterministic."""
-    _, _, hash1 = process_audit_artifact(sample_valid_content, "test.rim95")
-    _, _, hash2 = process_audit_artifact(sample_valid_content, "test.rim95")
-    
-    assert hash1 == hash2
+def test_rimos_audit_hash_changes_with_different_paths(sample_valid_content):
+    """
+    RIM-OS audit_content_sha256 includes input path in its scope,
+    so different paths for the same bytes may yield different hashes.
+    """
+    def _run(contents: bytes, name: str) -> str:
+        suffix = os.path.splitext(name)[1] or ".bin"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(contents)
+            path = tmp.name
+        try:
+            report = run_rim_audit(path)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        integrity = report.get("integrity", {}) or {}
+        return integrity.get("audit_content_sha256", "")
 
-
-def test_pipeline_hash_independent_of_filename(sample_valid_content):
-    """Hash should depend on content, not filename."""
-    _, _, hash1 = process_audit_artifact(sample_valid_content, "file1.rim95")
-    _, _, hash2 = process_audit_artifact(sample_valid_content, "file2.rim95")
-    
-    assert hash1 == hash2
+    h1 = _run(sample_valid_content, "file1.rim95")
+    h2 = _run(sample_valid_content, "file2.rim95")
+    assert h1 and h2 and h1 != h2
 
 
 # ─── API Hash Tests ──────────────────────────────────────────────────────────

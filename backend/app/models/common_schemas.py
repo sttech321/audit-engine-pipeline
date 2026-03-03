@@ -166,8 +166,8 @@ class LedgerInfo(BaseModel):
     """Ledger chain information for an audit entry."""
     ledger_id: str
     sequence_number: int
-    ledger_prev: Optional[str] = None
-    ledger_next: Optional[str] = None
+    prev_state: Optional[str] = None
+    next_state_hash: Optional[str] = None
     audit_content_sha256: str
     entry_hash: str
 
