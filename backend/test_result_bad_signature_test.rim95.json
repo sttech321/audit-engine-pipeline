@@ -1,0 +1,59 @@
+{
+  "fileInfo": {
+    "name": "bad_signature_test.rim95",
+    "size": 3,
+    "type": "application/octet-stream"
+  },
+  "kpis": [
+    {
+      "id": "kpi-1",
+      "label": "Audit Score",
+      "value": 98.5,
+      "trend": "up",
+      "status": "excellent",
+      "description": "Overall cryptographic integrity score"
+    },
+    {
+      "id": "kpi-2",
+      "label": "Issues Found",
+      "value": 0,
+      "trend": "down",
+      "status": "good",
+      "description": "Number of critical vulnerabilities found"
+    },
+    {
+      "id": "kpi-3",
+      "label": "Coverage",
+      "value": "100%",
+      "trend": "stable",
+      "status": "excellent",
+      "description": "Codebase paths verified"
+    }
+  ],
+  "verification": {
+    "status": "Verified",
+    "confidence": 99,
+    "timestamp": "1772047060.479848",
+    "checks": [
+      "Signature Valid",
+      "Hash Match",
+      "Structure Intact"
+    ]
+  },
+  "fileHash": "9a049b03f6fc40bfcf2f136320359257ed4af8513f71aa6fef47f17059bbae23",
+  "uploadId": "01dd160a-b635-4039-bab3-df28e6f3d6a4",
+  "metadata": {
+    "name": "Audit Report: bad_signature_test.rim95",
+    "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
+    "attributes": [
+      {
+        "trait_type": "Audit Score",
+        "value": 98.5
+      },
+      {
+        "trait_type": "Status",
+        "value": "Verified"
+      }
+    ]
+  }
+}
