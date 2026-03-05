@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # File Processing Limits
     min_file_size: int = 32  # Minimum bytes for valid audit artifact
     max_file_size: int = 10_000_000_000  # 10GB
+    max_batch_files: int = 20  # Maximum files per batch upload
+    max_batch_total_size: int = 20_000_000_000  # 20GB total across batch (soft guard)
     
     # Audit Pipeline Constants
     prime_p: int = 2**127 - 1  # Mersenne prime for p-adic arithmetic

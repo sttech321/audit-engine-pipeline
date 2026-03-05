@@ -1,5 +1,6 @@
 import uuid
-from typing import Optional
+from typing import Optional, List
+import asyncio
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
@@ -460,3 +461,65 @@ async def upload_audit_file(
             )
         else:
             raise HTTPException(status_code=500, detail=error_message)
+
+
+@router.post("/upload/batch")
+async def upload_audit_batch(
+    request: Request,
+    files: List[UploadFile] = File(...),
+):
+    """
+    Batch upload endpoint for processing multiple audit artifacts in parallel.
+
+    Each file is processed independently via the canonical /api/upload logic.
+    """
+    if not files:
+        raise HTTPException(status_code=422, detail="No files provided")
+
+    if len(files) > settings.max_batch_files:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Too many files in batch. Maximum is {settings.max_batch_files}.",
+        )
+
+    async def _process_single(file: UploadFile):
+        try:
+            # Reuse the existing single-file upload handler for full validation,
+            # abuse protection, RIM-OS audit, caching, and response shaping.
+            resp: UploadResponse = await upload_audit_file(request, file)
+            return {
+                "fileName": resp.fileInfo.name,
+                "status": "ok",
+                "uploadId": resp.uploadId,
+                "verification": resp.verification,
+                "kpis": resp.kpis,
+                "fileHash": resp.fileHash,
+            }
+        except HTTPException as exc:
+            # Preserve structured error detail where available.
+            return {
+                "fileName": file.filename or "",
+                "status": "failed",
+                "error": exc.detail,
+            }
+        except Exception as exc:  # pragma: no cover - defensive
+            return {
+                "fileName": file.filename or "",
+                "status": "failed",
+                "error": str(exc),
+            }
+
+    tasks = [_process_single(f) for f in files]
+    results = await asyncio.gather(*tasks)
+
+    batch_id = str(uuid.uuid4())
+    total_size = sum(getattr(f, "spool_max_size", 0) or 0 for f in files)
+    if total_size > settings.max_batch_total_size:
+        # Soft guard: warn but still return per-file results.
+        logger.warning(
+            "Batch total size estimate exceeded: size=%s limit=%s",
+            total_size,
+            settings.max_batch_total_size,
+        )
+
+    return {"batchId": batch_id, "results": results}
