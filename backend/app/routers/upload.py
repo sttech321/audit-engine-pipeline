@@ -362,18 +362,10 @@ async def upload_audit_file(
             entry_hash=ledger.get("events_hash", file_hash),
         )
 
-        # Minimal Penrose descriptor for SVG generation. RIM-OS v2 keeps the
-        # true Penrose tiling internally; here we expose a lightweight,
-        # deterministic view keyed off the ledger/integrity hashes so that
-        # /report/{upload_id}/svg always has something to render.
-        pseudo_penrose = {
-            "r": 0.5,
-            "theta": 0.0,
-            "sector": 0,
-            "penrose_hash": integrity_block.get("audit_content_sha256", ""),
-            "tau": 0.5,
-            "tile_hash": (ledger.get("next_state_hash") or file_hash)[:16],
-        }
+        # Penrose parameters from first chunk manifold geometry (unique per audit)
+        from app.utils.penrose import extract_penrose_from_report
+
+        penrose_details = extract_penrose_from_report(report, fallback_hash=file_hash)
 
         extended = ExtendedAuditResult(
             kpis=mock_kpis,
@@ -384,8 +376,8 @@ async def upload_audit_file(
             eu_ai_act=eu_ai_act,
             legal_disclosures=legal_disclosures,
             ledger=ledger_info,
-            penrose_details=pseudo_penrose,
-            tile_hash=pseudo_penrose["tile_hash"],
+            penrose_details=penrose_details,
+            tile_hash=penrose_details["tile_hash"],
         )
 
         upload_id = str(uuid.uuid4())

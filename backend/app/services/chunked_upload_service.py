@@ -23,6 +23,7 @@ from app.services.file_validation import (
     validate_file_extension,
 )
 from app.services.rim_wrapper import run_rim_audit
+from app.utils.penrose import extract_penrose_from_report
 
 settings = get_settings()
 
@@ -271,12 +272,7 @@ class ChunkedUploadService:
                 audit_content_sha256=integrity_block.get("audit_content_sha256", file_hash),
                 entry_hash=ledger.get("events_hash", file_hash),
             )
-            pseudo_penrose = {
-                "r": 0.5, "theta": 0.0, "sector": 0,
-                "penrose_hash": integrity_block.get("audit_content_sha256", ""),
-                "tau": 0.5,
-                "tile_hash": (ledger.get("next_state_hash") or file_hash)[:16],
-            }
+            penrose_details = extract_penrose_from_report(report, fallback_hash=file_hash)
             extended = ExtendedAuditResult(
                 kpis=mock_kpis,
                 verification=mock_verification,
@@ -286,8 +282,8 @@ class ChunkedUploadService:
                 eu_ai_act=eu_ai_act,
                 legal_disclosures=LegalDisclosures.default(),
                 ledger=ledger_info,
-                penrose_details=pseudo_penrose,
-                tile_hash=pseudo_penrose["tile_hash"],
+                penrose_details=penrose_details,
+                tile_hash=penrose_details["tile_hash"],
             )
             cache_audit_result(upload_id, extended)
 
