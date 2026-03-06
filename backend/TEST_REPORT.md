@@ -358,4 +358,4 @@ The system is **production-ready** for client deployment.
 
 ---
 
-*Report generated automatically from test suite analysis.*
+*Test coverage report — see pytest output for current results.*

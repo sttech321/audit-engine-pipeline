@@ -294,3 +294,25 @@ def compute_file_hash(contents: bytes) -> str:
         64-character lowercase hex hash
     """
     return hashlib.sha256(contents).hexdigest()
+
+
+def compute_file_hash_from_path(path: str, chunk_size: int = 1 * 1024 * 1024) -> str:
+    """
+    Compute SHA-256 hash of file at path using streaming.
+    Low memory: never loads full file into RAM.
+    
+    Args:
+        path: Path to file
+        chunk_size: Read chunk size (default 1 MiB)
+        
+    Returns:
+        64-character lowercase hex hash
+    """
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
