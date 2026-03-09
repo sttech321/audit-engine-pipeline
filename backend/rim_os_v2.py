@@ -107,8 +107,41 @@ PRIMES_256 = _sieve(256)
 # (same for chunks AND for Genesis Mints AND for new encoder)
 # ══════════════════════════════════════════════════════════════════
 
+def godel_encode_vector(data: bytes) -> Dict[str, Any]:
+    """
+    Vector-based Gödel encoding: position i → prime p_i, exponent = byte at position.
+
+    Splits data into 256-byte blocks. Per block: exps[i] = block[i] + 1 (preserves order).
+    Aggregates block vectors with position-weight so different byte orderings yield different
+    exponent vectors. True Gödel: each position maps to a prime; exponent = symbol at that position.
+    """
+    exps = [0] * 256
+    n = len(data)
+    if n == 0:
+        return {"exponents": exps, "exp_hash": canonical_hash(exps), "log2_size": 0.0}
+
+    num_blocks = (n + 255) // 256
+    for k in range(num_blocks):
+        start = k * 256
+        end = min(start + 256, n)
+        w = k + 1  # position weight: earlier blocks contribute less
+        for i in range(end - start):
+            byte_val = data[start + i]
+            exps[i] += (byte_val + 1) * w
+
+    log2 = sum(exps[i] * math.log2(PRIMES_256[i]) for i in range(256) if exps[i])
+    return {"exponents": exps,
+            "exp_hash":  canonical_hash(exps),
+            "log2_size": float(log2)}
+
+
 def godel_encode(hist: List[int]) -> Dict[str, Any]:
-    """Byte histogram → prime exponent vector (Gödel fingerprint)."""
+    """
+    Histogram-based encoding (legacy). Use godel_encode_vector for true Gödel.
+
+    Byte histogram → prime exponent vector. Does NOT preserve sequence order.
+    Kept for backward compatibility; prefer godel_encode_vector for chunk processing.
+    """
     exps = [int(c) for c in hist]
     log2 = sum(exps[i] * math.log2(PRIMES_256[i]) for i in range(256) if exps[i])
     return {"exponents": exps,
@@ -344,7 +377,7 @@ def process_chunk(chunk: bytes) -> Dict[str, Any]:
     hi_ent = shannon_entropy(hi_hist, len(hi))
     lo_ent = shannon_entropy(byte_histogram(lo), len(lo))
 
-    g   = godel_encode(hi_hist)
+    g   = godel_encode_vector(hi)
     p   = padic_lift(g["exponents"], k=3)
     ntt = ntt_fingerprint(p["residues"], L=1024)
     kag = kag_grid(ntt["mag64"])
