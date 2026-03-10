@@ -6,7 +6,7 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Metaplex, walletAdapterIdentity, irysStorage } from '@metaplex-foundation/js';
 import { Loader2, CheckCircle, ExternalLink, Coins } from 'lucide-react';
 import axios from 'axios';
-import type { UploadResponse, MintPrepareResponse } from '@/../shared/types';
+import type { UploadResponse, MintPrepareResponse } from '@shared/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 

@@ -7,7 +7,7 @@ import { MintFlow } from '@/components/MintFlow';
 import { ArrowLeft, Loader2, Download, FileImage, ShieldCheck, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import axios from 'axios';
-import type { UploadResponse } from '@/../shared/types';
+import type { UploadResponse } from '@shared/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const BASE = `${API_URL}/api`;
