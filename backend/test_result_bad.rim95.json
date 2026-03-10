@@ -1,0 +1,59 @@
+{
+  "fileInfo": {
+    "name": "bad.rim95",
+    "size": 8,
+    "type": "application/octet-stream"
+  },
+  "kpis": [
+    {
+      "id": "kpi-1",
+      "label": "Audit Score",
+      "value": 98.5,
+      "trend": "up",
+      "status": "excellent",
+      "description": "Overall cryptographic integrity score"
+    },
+    {
+      "id": "kpi-2",
+      "label": "Issues Found",
+      "value": 0,
+      "trend": "down",
+      "status": "good",
+      "description": "Number of critical vulnerabilities found"
+    },
+    {
+      "id": "kpi-3",
+      "label": "Coverage",
+      "value": "100%",
+      "trend": "stable",
+      "status": "excellent",
+      "description": "Codebase paths verified"
+    }
+  ],
+  "verification": {
+    "status": "Verified",
+    "confidence": 99,
+    "timestamp": "1772047062.7886848",
+    "checks": [
+      "Signature Valid",
+      "Hash Match",
+      "Structure Intact"
+    ]
+  },
+  "fileHash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
+  "uploadId": "a983b926-bb78-4631-aba4-451eec4c093a",
+  "metadata": {
+    "name": "Audit Report: bad.rim95",
+    "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
+    "attributes": [
+      {
+        "trait_type": "Audit Score",
+        "value": 98.5
+      },
+      {
+        "trait_type": "Status",
+        "value": "Verified"
+      }
+    ]
+  }
+}
