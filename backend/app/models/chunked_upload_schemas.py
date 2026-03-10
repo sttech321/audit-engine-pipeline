@@ -30,7 +30,9 @@ class ChunkedUploadStatusResponse(BaseModel):
     uploaded_chunks: List[int]
     status: str = Field(..., description="pending|uploading|merging|processing|completed|failed")
     progress_pct: float = 0.0
+    processing_pct: Optional[float] = None  # RIM-OS progress when status=processing (0-100)
     error: Optional[str] = None
+    result: Optional[dict] = None  # Full audit result when status=completed
 
 
 class ChunkedUploadCompleteResponse(BaseModel):

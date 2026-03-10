@@ -43,6 +43,8 @@ class UploadSession:
     result: Optional[dict] = None
     created_at: float = field(default_factory=time.time)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Per-chunk locks allow concurrent writes to different offsets (no lock contention across chunks)
+    _chunk_locks: Dict[int, asyncio.Lock] = field(default_factory=dict)
 
     def progress_pct(self) -> float:
         if self.total_chunks == 0:
@@ -60,6 +62,7 @@ class ChunkedUploadService:
         self._sessions: Dict[str, UploadSession] = {}
         self._sessions_lock = asyncio.Lock()
         self._temp_dir = settings.chunk_upload_temp_dir or None
+        self._processing_progress: Dict[str, float] = {}  # upload_id -> RIM-OS progress 0-100
 
     def _get_temp_dir(self) -> str:
         if self._temp_dir:
@@ -86,7 +89,9 @@ class ChunkedUploadService:
         temp_dir = self._get_temp_dir()
         temp_path = os.path.join(temp_dir, f"chunk_upload_{upload_id}.bin")
 
-        # Pre-allocate file to avoid fragmentation and allow parallel writes
+        # Pre-allocate file to avoid fragmentation and allow parallel writes.
+        # Per-chunk locks enable concurrent chunk uploads (each chunk writes to a unique offset).
+        chunk_locks = {i: asyncio.Lock() for i in range(total_chunks)}
         async with self._sessions_lock:
             session = UploadSession(
                 upload_id=upload_id,
@@ -95,6 +100,7 @@ class ChunkedUploadService:
                 total_chunks=total_chunks,
                 chunk_size=chunk_size,
                 temp_path=temp_path,
+                _chunk_locks=chunk_locks,
             )
             self._sessions[upload_id] = session
 
@@ -113,38 +119,42 @@ class ChunkedUploadService:
     ) -> tuple[bool, Optional[str]]:
         """
         Write a chunk to the session file.
+        Uses per-chunk lock so multiple chunks can be written concurrently (different offsets).
         Returns (success, error_message).
         """
         async with self._sessions_lock:
             session = self._sessions.get(upload_id)
             if not session:
                 return False, "Upload session not found or expired"
-
-        async with session._lock:
-            if chunk_index in session.uploaded_chunks:
-                return True, None  # Idempotent: already received
-
-            if chunk_index < 0 or chunk_index >= session.total_chunks:
+            chunk_lock = session._chunk_locks.get(chunk_index)
+            if not chunk_lock:
                 return False, f"Invalid chunk index {chunk_index}"
 
-            expected_size = session.chunk_size
-            if chunk_index == session.total_chunks - 1:
-                # Last chunk may be smaller
-                remainder = session.total_size - (chunk_index * session.chunk_size)
-                expected_size = min(session.chunk_size, remainder)
+        async with chunk_lock:
+            async with session._lock:
+                if chunk_index in session.uploaded_chunks:
+                    return True, None  # Idempotent: already received
+                if chunk_index < 0 or chunk_index >= session.total_chunks:
+                    return False, f"Invalid chunk index {chunk_index}"
+                expected_size = session.chunk_size
+                if chunk_index == session.total_chunks - 1:
+                    remainder = session.total_size - (chunk_index * session.chunk_size)
+                    expected_size = min(session.chunk_size, remainder)
+                if len(data) != expected_size and chunk_index < session.total_chunks - 1:
+                    return False, f"Chunk size mismatch: expected {expected_size}, got {len(data)}"
 
-            if len(data) != expected_size and chunk_index < session.total_chunks - 1:
-                return False, f"Chunk size mismatch: expected {expected_size}, got {len(data)}"
-
+            # File write without holding session lock (parallel writes to different offsets)
             offset = chunk_index * session.chunk_size
             try:
                 with open(session.temp_path, "r+b") as f:
                     f.seek(offset)
                     f.write(data)
-                session.uploaded_chunks.add(chunk_index)
             except Exception as e:
                 logger.error(f"Failed to write chunk {chunk_index}: {e}")
                 return False, str(e)
+
+            async with session._lock:
+                session.uploaded_chunks.add(chunk_index)
 
         return True, None
 
@@ -154,7 +164,7 @@ class ChunkedUploadService:
             session = self._sessions.get(upload_id)
         if not session:
             return None
-        return {
+        out: dict = {
             "upload_id": session.upload_id,
             "filename": session.filename,
             "total_size": session.total_size,
@@ -165,6 +175,24 @@ class ChunkedUploadService:
             "progress_pct": session.progress_pct(),
             "error": session.error,
         }
+        if session.status == "processing":
+            out["processing_pct"] = self._processing_progress.get(upload_id, 0.0)
+        if session.status == "completed" and session.result:
+            out["result"] = session.result
+        return out
+
+    def start_background_complete(self, upload_id: str) -> None:
+        """
+        Start complete_and_process in a background task. Returns immediately.
+        Client should poll GET /status until status=completed or failed.
+        """
+        async def _run() -> None:
+            try:
+                await self.complete_and_process(upload_id)
+            except Exception as e:
+                logger.error(f"Background complete failed for {upload_id}: {e}")
+
+        asyncio.create_task(_run())
 
     async def complete_and_process(self, upload_id: str) -> dict:
         """
@@ -197,8 +225,19 @@ class ChunkedUploadService:
             if actual_size < 32:
                 raise ValueError("File too small for audit artifact")
 
+            # Track RIM-OS progress for status polling (callback runs in worker thread)
+            self._processing_progress[upload_id] = 0.0
+
+            def _progress_cb(pct: float) -> None:
+                self._processing_progress[upload_id] = pct
+
             # Run RIM audit (streams from disk, low memory) in thread pool to avoid blocking
-            report = await asyncio.to_thread(run_rim_audit, session.temp_path)
+            report = await asyncio.to_thread(
+                run_rim_audit,
+                session.temp_path,
+                None,  # prev_state
+                _progress_cb,
+            )
 
             # Compute hash (streaming) in thread to avoid blocking
             file_hash = await asyncio.to_thread(compute_file_hash_from_path, session.temp_path)
@@ -306,6 +345,7 @@ class ChunkedUploadService:
             async with session._lock:
                 session.status = "completed"
                 session.result = response_data
+            self._processing_progress.pop(upload_id, None)
 
             # Cleanup temp file
             try:
@@ -317,6 +357,7 @@ class ChunkedUploadService:
 
         except Exception as e:
             logger.error(f"Chunked upload processing failed for {upload_id}: {e}")
+            self._processing_progress.pop(upload_id, None)
             async with session._lock:
                 session.status = "failed"
                 session.error = str(e)

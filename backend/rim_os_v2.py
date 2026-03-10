@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import argparse, base64, hashlib, json, math, mmap, os
 import struct, sys, time, zlib
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 try:
     import numpy as np
@@ -869,7 +869,8 @@ def parse_safetensors(path: str) -> Dict[str, Any]:
 def audit_file(path: str,
                genesis: Optional[Dict] = None,
                max_chunks: Optional[int] = None,
-               prev_state: Optional[str] = None) -> Dict[str, Any]:
+               prev_state: Optional[str] = None,
+               progress_callback: Optional[Callable[[float], None]] = None) -> Dict[str, Any]:
     """
     Stream-audit any binary file (safetensors, GGUF, raw weights, ...).
     Constant RAM usage regardless of file size.
@@ -921,6 +922,8 @@ def audit_file(path: str,
             if ci % 50 == 0 or ci * CHUNK_BYTES >= total:
                 pct  = 100.0 * min(ci * CHUNK_BYTES, total) / total
                 rate = min(ci * CHUNK_BYTES, total) / max(1e-6, time.time()-t0)
+                if progress_callback:
+                    progress_callback(pct)
                 sys.stderr.write(f"\r[RIM-OS v2] chunk={ci} {pct:.1f}%"
                                  f" {rate/1e6:.1f} MB/s  ")
                 sys.stderr.flush()

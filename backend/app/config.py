@@ -34,9 +34,9 @@ class Settings(BaseSettings):
     max_batch_files: int = 20  # Maximum files per batch upload
     max_batch_total_size: int = 20_000_000_000  # 20GB total across batch (soft guard)
 
-    # Chunked Upload (large files 5–10 GB)
+    # Chunked Upload (large files 1–10 GB)
     chunk_upload_enabled: bool = True
-    chunk_size_bytes: int = 10 * 1024 * 1024  # 10 MB per chunk
+    chunk_size_bytes: int = 20 * 1024 * 1024  # 20 MB per chunk - fewer HTTP requests
     chunk_upload_max_concurrent: int = 8  # Max parallel chunk requests
     chunk_upload_session_ttl_seconds: int = 3600  # 1 hour
     chunk_upload_temp_dir: str = ""  # Empty = system temp

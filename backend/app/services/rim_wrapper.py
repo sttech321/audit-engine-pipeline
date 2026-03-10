@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 try:
     # RIM-OS v2 deterministic audit engine (canonical math layer).
@@ -23,7 +23,11 @@ EXPECTED_SCHEMA: str = GENESIS.get("schema", "RIM-OS-2.0.0")
 GENESIS_FRAME_HASH: str = GENESIS.get("frame_hash", "")
 
 
-def run_rim_audit(file_path: str, prev_state: Optional[str] = None) -> Dict[str, Any]:
+def run_rim_audit(
+    file_path: str,
+    prev_state: Optional[str] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
+) -> Dict[str, Any]:
     """
     Run a RIM-OS v2 audit on a single file.
 
@@ -59,7 +63,12 @@ def run_rim_audit(file_path: str, prev_state: Optional[str] = None) -> Dict[str,
         RuntimeError: If the reported schema or genesis frame hash do not
             match the expected values derived from `GENESIS`.
     """
-    report = audit_file(file_path, genesis=GENESIS, prev_state=prev_state)
+    report = audit_file(
+        file_path,
+        genesis=GENESIS,
+        prev_state=prev_state,
+        progress_callback=progress_callback,
+    )
 
     schema = report.get("schema")
     if schema != EXPECTED_SCHEMA:

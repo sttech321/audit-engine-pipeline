@@ -8,6 +8,7 @@ Endpoints:
 - POST /api/upload/chunked/{id}/complete    - Signal completion, trigger merge & audit
 """
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.logging_config import logger
@@ -92,20 +93,41 @@ async def chunked_upload_status(upload_id: str):
     return ChunkedUploadStatusResponse(**status)
 
 
-@router.post("/upload/chunked/{upload_id}/complete", response_model=ChunkedUploadCompleteResponse)
+@router.post("/upload/chunked/{upload_id}/complete")
 async def chunked_upload_complete(upload_id: str):
     """
-    Signal that all chunks are uploaded. Triggers merge and RIM audit.
-    Returns audit result when done.
+    Signal that all chunks are uploaded. Starts merge and RIM audit in background.
+    Returns 202 immediately. Poll GET /status until status=completed to get the result.
     """
     if not settings.chunk_upload_enabled:
         raise HTTPException(status_code=503, detail="Chunked upload is disabled")
 
-    try:
-        result = await chunked_upload_service.complete_and_process(upload_id)
-        return ChunkedUploadCompleteResponse(**result)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Chunked upload complete failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    status = await chunked_upload_service.get_status(upload_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Upload session not found or expired")
+
+    if status["status"] == "completed" and status.get("result"):
+        return ChunkedUploadCompleteResponse(**status["result"])
+
+    if status["status"] not in ("uploading", "merging"):
+        if status["status"] == "processing":
+            return JSONResponse(
+                status_code=202,
+                content={"status": "processing", "upload_id": upload_id, "message": "RIM-OS audit in progress"},
+            )
+        if status["status"] == "failed":
+            raise HTTPException(status_code=400, detail=status.get("error", "Processing failed"))
+
+    uploaded = set(status["uploaded_chunks"])
+    total = status["total_chunks"]
+    if len(uploaded) != total:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not all chunks received yet: {len(uploaded)}/{total}",
+        )
+
+    chunked_upload_service.start_background_complete(upload_id)
+    return JSONResponse(
+        status_code=202,
+        content={"status": "processing", "upload_id": upload_id, "message": "RIM-OS audit started; poll /status for progress"},
+    )
