@@ -1,36 +1,123 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pass97
 
-## Getting Started
+**Cryptographic audit verification and NFT minting for AI model artifacts.**
 
-First, run the development server:
+Upload binary audit files, get a deterministic integrity score, and mint NFTs on Solana to prove provenance—without storing or reconstructing your data.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## What Is Pass97?
+
+Pass97 is a system that:
+
+1. **Reviews** your audit artifacts (`.lm3z`, `.rim0`, `.rim95`)
+2. **Returns** an integrity score (0–100), risk level, and verification status
+3. **Lets you mint** an NFT on Solana as proof of audit
+
+**Key point:** We never store your model weights or raw data. We only compute cryptographic fingerprints and produce a report.
+
+---
+
+## How It Works (Simple Flow)
+
+```
+Upload file → RIM-OS v2 audits it → You get score + hash + risk → Optional: mint NFT
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Step | What happens |
+|------|--------------|
+| **1. Upload** | Drag and drop your file. Small files upload in one go; large files (100+ MB) use parallel chunked upload with progress. |
+| **2. Audit** | RIM-OS v2 processes the file in chunks. You see real-time progress: upload %, then processing %. |
+| **3. Results** | Integrity score, risk (LOW / MEDIUM / HIGH), anomaly count, KAG score, SHA-256 hash. |
+| **4. Mint (optional)** | Connect a Solana wallet and mint an NFT that proves your audit passed. Metadata on IPFS; hash on-chain. |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## What You Get
 
-## Learn More
+- **Integrity score** (0–100) from the RIM-OS v2 pipeline
+- **Risk level**: LOW, MEDIUM, or HIGH
+- **Anomaly report**: which chunks (if any) look suspicious
+- **SHA-256 hash** for deterministic verification
+- **PDF report** and **Penrose SVG** visualization
+- **Optional NFT** on Solana (Devnet) proving audit provenance
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+pass97/
+├── backend/          # FastAPI + RIM-OS v2 audit engine
+├── web/              # Next.js frontend (upload, KPIs, mint)
+├── shared/           # Shared types (e.g. UploadResponse)
+├── docs/             # Developer guide and specs
+└── README.md
+```
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Quick Start
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 1. Start the backend
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate   # Windows
+# source venv/bin/activate  # macOS/Linux
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+### 2. Start the frontend
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+### 3. Open
+
+- Frontend: http://localhost:3000  
+- Backend API: http://localhost:8000  
+
+Set `NEXT_PUBLIC_API_URL=http://localhost:8000` in `web/.env.local` if the default differs.
+
+---
+
+## Core Principles
+
+| ✓ We do | ✗ We don't |
+|---------|------------|
+| Deterministic verification (same file → same result) | Store model weights |
+| Return hashes and metadata only | Run AI inference |
+| NFTs prove audit integrity | Store raw data |
+| Process and discard uploaded files | Reconstruct your model |
+
+---
+
+## Supported Formats
+
+- `.lm3z`
+- `.rim0`
+- `.rim95`
+
+---
+
+## For Developers
+
+See [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for:
+
+- RIM-OS v2 pipeline (Gödel, p-adic, NTT, KAG, Penrose)
+- API endpoints and data flow
+- Configuration and glossary
+
+---
+
+## Tech Stack
+
+- **Frontend:** Next.js, React, Solana Wallet Adapter, Tailwind
+- **Backend:** FastAPI, RIM-OS v2 (Python)
+- **Blockchain:** Solana (Devnet), Metaplex, IPFS (Irys)
