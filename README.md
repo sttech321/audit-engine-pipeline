@@ -1,123 +1,192 @@
 # Pass97
 
-**Cryptographic audit verification and NFT minting for AI model artifacts.**
+Cryptographic audit verification and optional NFT minting for audit artifacts.
 
-Upload binary audit files, get a deterministic integrity score, and mint NFTs on Solana to prove provenance—without storing or reconstructing your data.
+Pass97 is a full-stack application that accepts binary artifacts, runs them through the RIM-OS v2 audit pipeline, returns a deterministic integrity report, and can prepare NFT metadata for Solana-based provenance workflows.
 
----
+## Overview
 
-## What Is Pass97?
+The project is split into two apps:
 
-Pass97 is a system that:
+- `backend/`: FastAPI API for uploads, audit execution, report generation, and mint metadata preparation
+- `web/`: Next.js frontend for upload, progress tracking, report viewing, and wallet-based mint flow
 
-1. **Reviews** your audit artifacts (`.lm3z`, `.rim0`, `.rim95`)
-2. **Returns** an integrity score (0–100), risk level, and verification status
-3. **Lets you mint** an NFT on Solana as proof of audit
+Core behavior:
 
-**Key point:** We never store your model weights or raw data. We only compute cryptographic fingerprints and produce a report.
+- Same file produces the same SHA-256 hash and the same audit result
+- PASS97-native formats (`.lm3z`, `.rim0`, `.rim95`) get full verification messaging
+- Other file types can still be uploaded and receive a limited analysis response
+- Raw model data is not stored as application state; the system computes fingerprints, metrics, and generated reports
 
----
+## Main Flow
 
-## How It Works (Simple Flow)
-
+```text
+Upload file -> validate + hash -> RIM-OS v2 audit -> report artifacts -> optional NFT metadata prep
 ```
-Upload file → RIM-OS v2 audits it → You get score + hash + risk → Optional: mint NFT
-```
 
-| Step | What happens |
-|------|--------------|
-| **1. Upload** | Drag and drop your file. Small files upload in one go; large files (100+ MB) use parallel chunked upload with progress. |
-| **2. Audit** | RIM-OS v2 processes the file in chunks. You see real-time progress: upload %, then processing %. |
-| **3. Results** | Integrity score, risk (LOW / MEDIUM / HIGH), anomaly count, KAG score, SHA-256 hash. |
-| **4. Mint (optional)** | Connect a Solana wallet and mint an NFT that proves your audit passed. Metadata on IPFS; hash on-chain. |
+What the user sees:
 
----
+1. Upload a file from the web UI.
+2. Files under 100 MB use standard multipart upload.
+3. Files at or above 100 MB use resumable chunked upload with parallel chunk transfer.
+4. The backend runs the RIM-OS v2 audit and returns KPIs, verification status, and file hash.
+5. The user can open the generated report or prepare mint metadata for a Solana NFT flow.
 
-## What You Get
+## Features
 
-- **Integrity score** (0–100) from the RIM-OS v2 pipeline
-- **Risk level**: LOW, MEDIUM, or HIGH
-- **Anomaly report**: which chunks (if any) look suspicious
-- **SHA-256 hash** for deterministic verification
-- **PDF report** and **Penrose SVG** visualization
-- **Optional NFT** on Solana (Devnet) proving audit provenance
+- Deterministic SHA-256 file fingerprinting
+- RIM-OS v2 audit pipeline with integrity score, anomaly count, KAG score, and risk classification
+- Single-file upload and batch upload endpoints
+- Chunked upload for large files with progress polling and resumability
+- Structured metadata parsing and optional Ed25519 signature verification
+- PDF, HTML, and Penrose SVG report generation
+- Abuse protection features including rate limiting, deduplication, and replay detection
+- Solana wallet frontend flow with backend mint metadata preparation
 
----
+## Repository Layout
 
-## Project Structure
-
-```
+```text
 pass97/
-├── backend/          # FastAPI + RIM-OS v2 audit engine
-├── web/              # Next.js frontend (upload, KPIs, mint)
-├── shared/           # Shared types (e.g. UploadResponse)
-├── docs/             # Developer guide and specs
-└── README.md
+|-- backend/
+|   |-- app/
+|   |   |-- main.py
+|   |   |-- routers/
+|   |   |-- services/
+|   |   `-- models/
+|   |-- tests/
+|   |-- requirements.txt
+|   `-- rim_os_v2.py
+|-- web/
+|   |-- src/
+|   |   |-- app/
+|   |   `-- components/
+|   |-- package.json
+|   `-- README.md
+|-- shared/
+|   `-- types.ts
+`-- docs/
+    `-- DEVELOPER_GUIDE.md
 ```
 
----
+## Backend API
 
-## Quick Start
+Primary routes exposed by the FastAPI app:
+
+- `GET /`: health-style root message
+- `POST /api/upload`: single-file upload and audit
+- `POST /api/upload/batch`: batch upload
+- `POST /api/upload/chunked/init`: create chunked upload session
+- `PUT /api/upload/chunked/{upload_id}/chunk/{chunk_index}`: upload a chunk
+- `GET /api/upload/chunked/{upload_id}/status`: poll chunked upload status
+- `POST /api/upload/chunked/{upload_id}/complete`: finalize chunked upload and start processing
+- `GET /api/report/{upload_id}/html`: rendered report
+- `GET /api/report/{upload_id}/pdf`: PDF report
+- `GET /api/report/{upload_id}/svg`: Penrose SVG
+- `POST /api/mint/prepare`: prepare deterministic NFT metadata payload
+- `POST /api/mint/finalize`: finalize mint bookkeeping
+
+## Local Setup
+
+### Prerequisites
+
+- Python 3.11+ recommended
+- Node.js 20+ recommended
+- npm
 
 ### 1. Start the backend
 
-```bash
+```powershell
 cd backend
 python -m venv venv
-venv\Scripts\activate   # Windows
-# source venv/bin/activate  # macOS/Linux
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+copy .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
+Backend will be available at `http://localhost:8000`.
+
 ### 2. Start the frontend
 
-```bash
+```powershell
 cd web
 npm install
+@"
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_MAX_FILE_SIZE_BYTES=10000000000
+"@ > .env.local
 npm run dev
 ```
 
-### 3. Open
+Frontend will be available at `http://localhost:3000`.
 
-- Frontend: http://localhost:3000  
-- Backend API: http://localhost:8000  
+## Configuration Notes
 
-Set `NEXT_PUBLIC_API_URL=http://localhost:8000` in `web/.env.local` if the default differs.
+Important backend defaults from `backend/app/config.py`:
 
----
+- `max_file_size`: `10_000_000_000` bytes
+- `chunk_size_bytes`: `20 MB`
+- `chunk_upload_max_concurrent`: `8`
+- `enable_rate_limiting`: enabled by default
+- `enable_deduplication`: enabled by default
+- `parse_metadata`: enabled by default
+- `verify_signatures`: enabled by default
 
-## Core Principles
+Important frontend behavior from `web/src/app/upload/page.tsx`:
 
-| ✓ We do | ✗ We don't |
-|---------|------------|
-| Deterministic verification (same file → same result) | Store model weights |
-| Return hashes and metadata only | Run AI inference |
-| NFTs prove audit integrity | Store raw data |
-| Process and discard uploaded files | Reconstruct your model |
+- Files `>= 100 MB` switch to chunked upload
+- API base URL comes from `NEXT_PUBLIC_API_URL`
+- Frontend max file size display comes from `NEXT_PUBLIC_MAX_FILE_SIZE_BYTES`
 
----
+## Supported Artifact Handling
 
-## Supported Formats
+PASS97-native artifact formats:
 
 - `.lm3z`
 - `.rim0`
 - `.rim95`
 
----
+Current behavior:
 
-## For Developers
+- Native formats are labeled as full PASS97 audit mode
+- Non-native formats are still accepted and return a structured response with limited-analysis messaging
 
-See [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for:
+## Reports and Outputs
 
-- RIM-OS v2 pipeline (Gödel, p-adic, NTT, KAG, Penrose)
-- API endpoints and data flow
-- Configuration and glossary
+Each successful upload can produce:
 
----
+- Verification KPIs
+- Verification status and confidence
+- SHA-256 file hash
+- Cached report data keyed by `uploadId`
+- HTML report view
+- PDF report download
+- Penrose SVG visualization
+
+## Testing
+
+Backend tests are located under `backend/tests/`.
+
+Typical test commands:
+
+```powershell
+cd backend
+pytest
+```
+
+There is currently no project-level root script that runs both frontend and backend checks together.
 
 ## Tech Stack
 
-- **Frontend:** Next.js, React, Solana Wallet Adapter, Tailwind
-- **Backend:** FastAPI, RIM-OS v2 (Python)
-- **Blockchain:** Solana (Devnet), Metaplex, IPFS (Irys)
+- Frontend: Next.js 16, React 19, TypeScript, Axios, Solana wallet adapter
+- Backend: FastAPI, Pydantic, Uvicorn, PyNaCl, SlowAPI, fpdf2
+- Audit engine: `backend/rim_os_v2.py`
+- Blockchain-related flow: Solana + NFT metadata preparation
+
+## Developer Docs
+
+For implementation details, read:
+
+- [Developer Guide](docs/DEVELOPER_GUIDE.md)
+- [Backend chunked upload example](backend/examples/CHUNKED_UPLOAD_README.md)
+- [Frontend app notes](web/README.md)
