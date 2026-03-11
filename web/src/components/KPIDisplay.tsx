@@ -10,23 +10,43 @@ import {
   Info,
   Zap,
 } from "lucide-react";
-import type { KPI, VerificationStatus } from "../../../shared/types";
+import type {
+  KPI,
+  UploadMetadata,
+  VerificationStatus,
+} from "../../../shared/types";
 
 interface KPIDisplayProps {
   kpis: KPI[];
   verification: VerificationStatus;
   fileHash: string;
+  metadata?: UploadMetadata;
 }
+
+const formatVerificationTimestamp = (timestamp: string) => {
+  if (!timestamp) return "Timestamp unavailable";
+
+  const numeric = Number(timestamp);
+  const parsed = Number.isNaN(numeric)
+    ? new Date(timestamp)
+    : new Date(numeric * 1000);
+
+  return Number.isNaN(parsed.getTime())
+    ? timestamp
+    : parsed.toLocaleString();
+};
 
 export const KPIDisplay: FC<KPIDisplayProps> = ({
   kpis,
   verification,
   fileHash,
+  metadata,
 }) => {
   const isVerified =
     verification.status === "Verified" ||
     verification.status === "Verified with Warnings";
   const isWarning = verification.status === "Verified with Warnings";
+  const signatureVerified = metadata?.signature_verified;
 
   // Helper for KPI icons based on ID or Label
   const getKpiIcon = (kpi: KPI) => {
@@ -67,6 +87,13 @@ export const KPIDisplay: FC<KPIDisplayProps> = ({
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 Verification Status: {verification.status}
               </h3>
+              {metadata?.verification_mode && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-900 px-3 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                  {metadata.verification_mode === "limited"
+                    ? "Verification Mode: Limited Analysis"
+                    : "Verification Mode: Full PASS97 Audit"}
+                </span>
+              )}
               <span className="text-sm font-medium text-gray-500">
                 Confidence: {verification.confidence}%
               </span>
@@ -102,10 +129,7 @@ export const KPIDisplay: FC<KPIDisplayProps> = ({
             <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
               <Clock className="w-3 h-3" />
               <span>
-                Executed at{" "}
-                {new Date(
-                  parseFloat(verification.timestamp) * 1000,
-                ).toLocaleString()}
+                Executed at {formatVerificationTimestamp(verification.timestamp)}
               </span>
             </div>
           </div>
@@ -162,6 +186,35 @@ export const KPIDisplay: FC<KPIDisplayProps> = ({
         <p className="text-sm font-mono text-gray-700 dark:text-gray-300 break-all bg-gray-50 dark:bg-gray-900 p-3 rounded border border-gray-100 dark:border-gray-700">
           {fileHash}
         </p>
+      </div>
+
+      <div className="p-5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          Signature Verification
+        </h4>
+        <div className="flex items-start gap-3">
+          {signatureVerified === true ? (
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+          ) : signatureVerified === false ? (
+            <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          ) : (
+            <Info className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
+          )}
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+            <p className="font-medium">
+              {signatureVerified === true
+                ? "Signed metadata verified"
+                : signatureVerified === false
+                  ? "Signed metadata failed verification"
+                  : "No signature data available"}
+            </p>
+            {metadata?.public_key && (
+              <p className="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">
+                Public key: {metadata.public_key}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

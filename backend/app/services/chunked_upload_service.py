@@ -19,7 +19,9 @@ from typing import Dict, Optional, Set
 from app.config import get_settings
 from app.logging_config import logger
 from app.services.file_validation import (
+    SUPPORTED_EXTENSIONS,
     compute_file_hash_from_path,
+    get_file_extension,
     validate_file_extension,
 )
 from app.services.rim_wrapper import run_rim_audit
@@ -45,6 +47,10 @@ class UploadSession:
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     # Per-chunk locks allow concurrent writes to different offsets (no lock contention across chunks)
     _chunk_locks: Dict[int, asyncio.Lock] = field(default_factory=dict)
+    # Whether this filename maps to a PASS97-native format that should be
+    # advertised as "full audit" in responses. Other extensions still receive
+    # analysis but are reported as limited mode.
+    supported_format: bool = True
 
     def progress_pct(self) -> float:
         if self.total_chunks == 0:
@@ -78,9 +84,15 @@ class ChunkedUploadService:
         chunk_size: int,
     ) -> tuple[str, list[int]]:
         """Create new upload session. Returns (upload_id, [] for new or existing chunk indices for resume)."""
-        ext_valid, ext_err = validate_file_extension(filename)
-        if not ext_valid:
-            raise ValueError(ext_err.message if ext_err else "Invalid file extension")
+        # Extension awareness only – we no longer reject based solely on file
+        # extension. Instead, we track whether the artifact is in a
+        # PASS97-native format so that the response can distinguish full
+        # audit vs limited analysis.
+        if settings.validate_file_extension:
+            validate_file_extension(filename)
+
+        ext = get_file_extension(filename or "")
+        supported_format = ext in SUPPORTED_EXTENSIONS
 
         if total_size > settings.max_file_size:
             raise ValueError(f"File too large. Maximum is {settings.max_file_size // 1_000_000}MB.")
@@ -101,6 +113,7 @@ class ChunkedUploadService:
                 chunk_size=chunk_size,
                 temp_path=temp_path,
                 _chunk_locks=chunk_locks,
+                supported_format=supported_format,
             )
             self._sessions[upload_id] = session
 
@@ -276,7 +289,22 @@ class ChunkedUploadService:
 
             status_str = "Verified" if risk_level == "LOW" else "Verified with Warnings" if risk_level == "MEDIUM" else "Verification Failed"
 
+            # Annotate verification mode for chunked uploads based on the
+            # original filename extension.
+            if session.supported_format:
+                verification_mode = "Full PASS97 Audit"
+                verification_mode_key = "full"
+                verification_mode_reason = None
+            else:
+                verification_mode = "Limited Analysis"
+                verification_mode_key = "limited"
+                verification_mode_reason = (
+                    "File type not in PASS97-native formats (.lm3z, .rim0, .rim95); "
+                    "RIM-OS metrics computed, but format-specific semantics may be unavailable."
+                )
+
             checks = [
+                f"Verification Mode - {verification_mode}",
                 "Stage 1 - Schema & Genesis: OK",
                 f"Stage 2 - Entropy: avg_entropy_bits={summary.get('avg_entropy_bits', 0.0):.4f}",
                 f"Stage 3 - Penrose geometry: avg_penrose_match={summary.get('avg_penrose_match', 0.0):.4f}",
@@ -339,6 +367,12 @@ class ChunkedUploadService:
                         {"trait_type": "Audit Score", "value": audit_score},
                         {"trait_type": "Status", "value": status_str}
                     ],
+                    "verification_mode": verification_mode_key,
+                    **(
+                        {"verification_mode_reason": verification_mode_reason}
+                        if verification_mode_reason
+                        else {}
+                    ),
                 },
             }
 

@@ -14,11 +14,18 @@ interface MintFlowProps {
     uploadData: UploadResponse;
 }
 
+interface MintResult {
+    mintAddress: string;
+    metadataUri: string;
+    mintHash: string;
+    explorerUrl: string;
+}
+
 export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
     const { publicKey, signTransaction } = useWallet();
     const { connection } = useConnection();
     const [isMinting, setIsMinting] = useState(false);
-    const [mintResult, setMintResult] = useState<any>(null);
+    const [mintResult, setMintResult] = useState<MintResult | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const handleMint = async () => {
@@ -31,7 +38,6 @@ export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
         setError(null);
 
         try {
-            // Step 1: Prepare metadata and upload to IPFS
             const prepareResponse = await axios.post<MintPrepareResponse>(
                 `${API_URL}/api/mint/prepare`,
                 {
@@ -44,12 +50,10 @@ export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
 
             const { metadata, mintHash, nftMetadata } = prepareResponse.data;
 
-            // Step 2: Initialize Metaplex
             const metaplex = Metaplex.make(connection)
                 .use(walletAdapterIdentity({ publicKey, signTransaction }))
                 .use(irysStorage());
 
-            // Step 3: Create NFT
             const { nft } = await metaplex.nfts().create({
                 uri: metadata.url,
                 name: nftMetadata.name,
@@ -57,7 +61,6 @@ export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
                 symbol: nftMetadata.symbol,
             });
 
-            // Step 4: Record mint
             await axios.post(`${API_URL}/api/mint/finalize`, {
                 mintAddress: nft.address.toString(),
                 uploadId: uploadData.uploadId,
@@ -71,8 +74,9 @@ export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
                 explorerUrl: `https://explorer.solana.com/address/${nft.address.toString()}?cluster=devnet`
             });
 
-        } catch (err: any) {
-            setError(err.response?.data?.error || err.message || 'Failed to mint NFT');
+        } catch (err: unknown) {
+            const responseError = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+            setError(typeof responseError === 'string' ? responseError : err instanceof Error ? err.message : 'Failed to mint NFT');
             console.error('Mint error:', err);
         } finally {
             setIsMinting(false);
@@ -84,23 +88,8 @@ export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
 
     return (
         <div className="space-y-6">
-            {/* <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
-                        Mint Audit NFT
-                    </h2>
-                    <span className="inline-block text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2 py-0.5 rounded-full">
-                        ⚗️ Alpha / Internal Tool — Not a Certification
-                    </span>
-                </div>
-            </div> */}
-
-            {/* Block minting for failed audits */}
             {isAuditFailed && (
                 <div className="p-5 bg-red-50 dark:bg-red-950/20 border-2 border-red-200 dark:border-red-800 rounded-xl">
-                    <p className="text-sm font-semibold text-red-800 dark:text-red-200">
-                        {/* ❌ Minting is disabled — Audit Verification Failed */}
-                    </p>
                     <p className="text-xs text-red-600 dark:text-red-400 mt-1">
                         The uploaded artifact did not pass the cryptographic pipeline checks.
                         Re-upload a valid audit artifact to proceed.
@@ -110,9 +99,6 @@ export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
 
             {!publicKey ? (
                 <div className="text-center py-8">
-                    {/* <p className="text-gray-600 dark:text-gray-400 mb-4">
-                        Connect your wallet to mint an NFT
-                    </p> */}
                     {!isAuditFailed && <WalletMultiButton className="!bg-blue-600 hover:!bg-blue-700" />}
                 </div>
             ) : mintResult ? (

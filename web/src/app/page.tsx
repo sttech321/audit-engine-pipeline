@@ -70,7 +70,12 @@ export default function Home() {
               Upload & Analyze
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Drop your audit artifact—we support <span className="font-mono text-sm">.lm3z</span>, <span className="font-mono text-sm">.rim0</span>, and <span className="font-mono text-sm">.rim95</span> formats.
+              Drop your audit artifact — any file type can be uploaded.{" "}
+              Full verification is supported for{" "}
+              <span className="font-mono text-sm">.lm3z</span>,{" "}
+              <span className="font-mono text-sm">.rim0</span>,{" "}
+              and <span className="font-mono text-sm">.rim95</span>{" "}
+              artifacts. Other file types will receive limited analysis.
             </p>
             <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
               <li className="flex items-start gap-2">
@@ -230,7 +235,10 @@ export default function Home() {
           </Link>
           <span className="text-gray-400 dark:text-gray-500 self-center">|</span>
           <p className="text-sm text-gray-500 dark:text-gray-400 self-center">
-            Supported: <span className="font-mono">.lm3z</span>, <span className="font-mono">.rim0</span>, <span className="font-mono">.rim95</span>
+            Any file type can be uploaded. Full verification is available for{" "}
+            <span className="font-mono">.lm3z</span>,{" "}
+            <span className="font-mono">.rim0</span>,{" "}
+            <span className="font-mono">.rim95</span>; other files receive limited analysis.
           </p>
         </div>
       </main>

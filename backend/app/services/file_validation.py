@@ -3,11 +3,15 @@ File validation service with secure file handling.
 
 This is an ADDITIVE service that provides:
 - Streaming file upload with SpooledTemporaryFile
-- Extension validation (whitelist: .lm3z, .rim0, .rim95)
+- Optional extension awareness for PASS97-supported formats
 - MIME type validation
 - Size validation (preserves existing error behavior)
 
-All existing behavior is preserved - this adds validation layers without breaking anything.
+NOTE:
+- The upload API must now accept *any* file extension.
+- PASS97-specific formats (.lm3z, .rim0, .rim95) are treated as
+  "full audit" inputs, while all other extensions are allowed but
+  may only receive limited analysis at the reporting layer.
 """
 import hashlib
 import io
@@ -21,9 +25,12 @@ from app.logging_config import logger
 from app.models.error_schemas import ErrorCode, StructuredError
 
 
-# ─── Allowed File Types ──────────────────────────────────────────────────────
+# ─── File Types ───────────────────────────────────────────────────────────────
 
-ALLOWED_EXTENSIONS = {".lm3z", ".rim0", ".rim95"}
+# Extensions that are wired for full PASS97 audit semantics (metadata parsing,
+# signature verification, etc.). Other extensions are still accepted but
+# reported as "limited analysis" by the upload pipeline.
+SUPPORTED_EXTENSIONS = {".lm3z", ".rim0", ".rim95"}
 
 # MIME types that may be reported for binary audit artifacts
 ALLOWED_MIME_TYPES = {
@@ -62,22 +69,26 @@ class FileValidationResult:
 
 
 def get_file_extension(filename: str) -> str:
-    """Extract file extension from filename."""
+    """Extract file extension from filename (lowercase, includes leading dot).
+
+    Returns empty string when no extension is present.
+    """
     if not filename:
         return ""
-    lower_name = filename.lower()
-    for ext in ALLOWED_EXTENSIONS:
-        if lower_name.endswith(ext):
-            return ext
-    # Return the actual extension for error messages
-    if "." in filename:
-        return "." + filename.rsplit(".", 1)[-1].lower()
-    return ""
+    if "." not in filename:
+        return ""
+    return "." + filename.rsplit(".", 1)[-1].lower()
 
 
 def validate_file_extension(filename: str) -> Tuple[bool, Optional[StructuredError]]:
     """
-    Validate file extension against whitelist.
+    Extension awareness helper.
+
+    Historically this enforced a strict whitelist of PASS97 formats.
+    The platform now accepts ANY extension, so this function never
+    rejects purely on file type. Callers can still use
+    SUPPORTED_EXTENSIONS to distinguish full-audit formats from
+    "limited analysis" formats.
     
     Args:
         filename: Original filename
@@ -85,13 +96,10 @@ def validate_file_extension(filename: str) -> Tuple[bool, Optional[StructuredErr
     Returns:
         Tuple of (is_valid, error if invalid)
     """
-    ext = get_file_extension(filename)
-    if ext not in ALLOWED_EXTENSIONS:
-        return False, StructuredError(
-            code=ErrorCode.FILE_INVALID_EXTENSION,
-            message=f"Invalid file extension: '{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
-            details={"extension": ext, "allowed": list(sorted(ALLOWED_EXTENSIONS))}
-        )
+    _ = get_file_extension(filename)
+    # All extensions are now accepted. Backward-compatible callers
+    # still receive (True, None) and should NOT treat extension
+    # alone as a reason to reject uploads.
     return True, None
 
 

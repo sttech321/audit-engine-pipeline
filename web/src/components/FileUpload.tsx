@@ -1,37 +1,50 @@
 'use client';
 
 import { FC, useState, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type FileRejection } from 'react-dropzone';
 import { Upload, FileCheck, AlertCircle } from 'lucide-react';
 
 interface FileUploadProps {
     onFileSelect: (file: File) => void;
     isLoading?: boolean;
+    maxFileSizeBytes?: number;
 }
 
-export const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
+const formatSize = (bytes: number) => {
+    if (bytes >= 1024 * 1024 * 1024) {
+        return `${(bytes / 1024 / 1024 / 1024).toFixed(0)} GB`;
+    }
+    return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+};
+
+export const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading, maxFileSizeBytes }) => {
     const [error, setError] = useState<string | null>(null);
 
-    const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
+    const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
         setError(null);
 
         if (rejectedFiles.length > 0) {
-            setError('Invalid file type. Please upload .lm3z, .rim0, or .rim95 files only.');
+            const firstError = rejectedFiles[0]?.errors?.[0]?.code;
+            if (firstError === 'file-too-large' && maxFileSizeBytes) {
+                setError(`File too large. Maximum size is ${formatSize(maxFileSizeBytes)}.`);
+                return;
+            }
+            setError('Unable to process this file. Please try a different file or contact support.');
             return;
         }
 
         if (acceptedFiles.length > 0) {
             onFileSelect(acceptedFiles[0]);
         }
-    }, [onFileSelect]);
+    }, [maxFileSizeBytes, onFileSelect]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
-        accept: {
-            'application/octet-stream': ['.lm3z', '.rim0', '.rim95']
-        },
+        // Any file type is allowed; size limits and backend logic decide
+        // whether full PASS97 audit or limited analysis is performed.
+        maxSize: maxFileSizeBytes,
         maxFiles: 1,
-        disabled: isLoading
+        disabled: isLoading,
     });
 
     return (
@@ -62,7 +75,7 @@ export const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => 
                             {isDragActive ? 'Drop file here' : 'Drag & drop audit file'}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                            or click to browse (.lm3z, .rim0, .rim95)
+                            or click to browse any file type
                         </p>
                     </div>
                 </div>

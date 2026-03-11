@@ -4,13 +4,14 @@ import { useState, useCallback } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { KPIDisplay } from '@/components/KPIDisplay';
 import { MintFlow } from '@/components/MintFlow';
-import { ArrowLeft, Loader2, Download, FileImage, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Loader2, Download, FileImage, ShieldCheck, AlertTriangle, FileText } from 'lucide-react';
 import Link from 'next/link';
 import axios from 'axios';
-import type { UploadResponse } from '@shared/types';
+import type { KPI, UploadMetadata, UploadResponse, VerificationStatus } from '@shared/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const BASE = `${API_URL}/api`;
+const MAX_FILE_SIZE_BYTES = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_BYTES || 10_000_000_000);
 
 // Use chunked upload for files >= 100 MB (faster, resumable)
 const CHUNK_THRESHOLD = 100 * 1024 * 1024;
@@ -35,21 +36,28 @@ export default function UploadPage() {
     const [error, setError] = useState<string | null>(null);
     const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
-    const extractErrorMessage = (err: any): string => {
-        const detail = err?.response?.data?.detail;
+    const extractErrorMessage = (err: unknown): string => {
+        const detail = axios.isAxiosError(err) ? err.response?.data?.detail : undefined;
         if (typeof detail === 'string') return detail;
-        if (detail?.error?.message) return detail.error.message;
-        if (detail?.error?.code) return detail.error.code;
-        return err?.message || 'Failed to upload file';
+        if (detail && typeof detail === 'object' && 'error' in detail) {
+            const error = detail.error;
+            if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+                return error.message;
+            }
+            if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
+                return error.code;
+            }
+        }
+        return err instanceof Error ? err.message : 'Failed to upload file';
     };
 
     const mapChunkedToUploadResponse = (r: {
         upload_id: string;
         file_info: { name: string; size: number; type?: string };
-        kpis: any[];
-        verification: any;
+        kpis: KPI[];
+        verification: VerificationStatus;
         file_hash: string;
-        metadata: Record<string, any>;
+        metadata: UploadMetadata;
     }): UploadResponse => ({
         uploadId: r.upload_id,
         fileInfo: { name: r.file_info.name, size: r.file_info.size, type: r.file_info.type ?? 'application/octet-stream' },
@@ -73,7 +81,9 @@ export default function UploadPage() {
         const { upload_id, uploaded_chunks: existing } = initRes.data;
 
         const missing: number[] = [];
-        for (let i = 0; i < totalChunks; i++) if (!existing.includes(i)) missing.push(i);
+        for (let i = 0; i < totalChunks; i++) {
+            if (!existing.includes(i)) missing.push(i);
+        }
 
         let completedCount = existing.length;
         const formatMb = (n: number) => (n / 1024 / 1024).toFixed(1);
@@ -122,7 +132,7 @@ export default function UploadPage() {
         setUploadProgress({
             phase: 'processing',
             pct: 0,
-            label: 'Upload complete · Processing with RIM‑OS v2…',
+            label: 'Upload complete. Processing with RIM-OS v2...',
             bytesLoaded: file.size,
             bytesTotal: file.size,
             chunksUploaded: totalChunks,
@@ -137,7 +147,6 @@ export default function UploadPage() {
             return mapChunkedToUploadResponse(completeRes.data);
         }
 
-        // 202: poll status until completed
         const pollInterval = 1500;
         while (true) {
             const statusRes = await axios.get(`${BASE}/upload/chunked/${upload_id}/status`);
@@ -146,7 +155,7 @@ export default function UploadPage() {
             setUploadProgress({
                 phase: 'processing',
                 pct: processing_pct ?? 0,
-                label: `Processing with RIM‑OS v2… ${(processing_pct ?? 0).toFixed(0)}%`,
+                label: `Processing with RIM-OS v2... ${(processing_pct ?? 0).toFixed(0)}%`,
                 bytesLoaded: file.size,
                 bytesTotal: file.size,
                 chunksUploaded: totalChunks,
@@ -181,7 +190,7 @@ export default function UploadPage() {
                     phase: isUploadComplete ? 'processing' : 'uploading',
                     pct,
                     label: isUploadComplete
-                        ? 'Upload complete · Processing with RIM‑OS v2…'
+                        ? 'Upload complete. Processing with RIM-OS v2...'
                         : `Uploading file: ${loadedMb} MB of ${totalMb} MB`,
                     bytesLoaded: e.loaded,
                     bytesTotal: e.total ?? undefined,
@@ -212,7 +221,7 @@ export default function UploadPage() {
                 : await uploadSingle(file);
 
             setUploadData(result);
-        } catch (err: any) {
+        } catch (err: unknown) {
             setError(extractErrorMessage(err));
             console.error('Upload error:', err);
         } finally {
@@ -223,7 +232,6 @@ export default function UploadPage() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-            {/* Header */}
             <header className="border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex items-center justify-between">
@@ -237,12 +245,11 @@ export default function UploadPage() {
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                             Upload & Verify Audit
                         </h1>
-                        <div className="w-24"></div> {/* Spacer for centering */}
+                        <div className="w-24"></div>
                     </div>
                 </div>
             </header>
 
-            {/* Main Content */}
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 {!uploadData ? (
                     <div className="max-w-3xl mx-auto">
@@ -252,18 +259,22 @@ export default function UploadPage() {
                                     Upload Audit File
                                 </h2>
                                 <p className="text-gray-600 dark:text-gray-400">
-                                    Pass97 will run your artifact through the canonical RIM‑OS v2
-                                    weight audit engine and return a compliance‑ready summary.
+                                    Pass97 will run your artifact through the canonical RIM-OS v2
+                                    weight audit engine and return a compliance-ready summary.
                                 </p>
                                 <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-50/80 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                                     <ShieldCheck className="w-3 h-3" />
-                                    <span>Powered by RIM‑OS v2 (deterministic ledger)</span>
+                                    <span>Powered by RIM-OS v2 (deterministic ledger)</span>
                                 </div>
                             </div>
 
                             <div className="grid gap-8 md:grid-cols-[minmax(0,2fr),minmax(0,1.5fr)]">
                                 <div>
-                                    <FileUpload onFileSelect={handleFileSelect} isLoading={isUploading} />
+                                    <FileUpload
+                                        onFileSelect={handleFileSelect}
+                                        isLoading={isUploading}
+                                        maxFileSizeBytes={MAX_FILE_SIZE_BYTES}
+                                    />
 
                                     {isUploading && (
                                         <div className="mt-6 space-y-3">
@@ -284,7 +295,7 @@ export default function UploadPage() {
                                             ) : (
                                                 <div className="flex items-center justify-center gap-3 text-blue-600 dark:text-blue-400">
                                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                                    <span>Preparing upload…</span>
+                                                    <span>Preparing upload...</span>
                                                 </div>
                                             )}
                                         </div>
@@ -306,17 +317,31 @@ export default function UploadPage() {
                                         Artifact requirements
                                     </h3>
                                     <ul className="space-y-1.5">
-                                        <li>• Supported formats: <span className="font-mono">.rim0</span>, <span className="font-mono">.rim95</span>, <span className="font-mono">.lm3z</span></li>
-                                        <li>• High‑entropy binary weight files recommended</li>
-                                        <li>• Large files (100+ MB) use parallel chunked upload (20 MB chunks, 8 concurrent)</li>
+                                        <li>
+                                            Drop your audit artifact — any file type can be uploaded.
+                                        </li>
+                                        <li>
+                                            Full verification is supported for{" "}
+                                            <span className="font-mono">.lm3z</span>,{" "}
+                                            <span className="font-mono">.rim0</span>,{" "}
+                                            <span className="font-mono">.rim95</span>{" "}
+                                            artifacts.
+                                        </li>
+                                        <li>
+                                            Other file types will receive limited analysis (hash, entropy, basic structure)
+                                            but still produce a structured report.
+                                        </li>
+                                        <li>
+                                            Maximum file size: {(MAX_FILE_SIZE_BYTES / 1024 / 1024 / 1024).toFixed(0)} GB
+                                        </li>
                                     </ul>
                                     <h3 className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
                                         What you get
                                     </h3>
                                     <ul className="space-y-1.5">
-                                        <li>• Integrity score (0–100) from RIM‑OS v2</li>
-                                        <li>• Risk classification with anomaly summary</li>
-                                        <li>• Optional PDF + SVG artifacts for governance</li>
+                                        <li>Integrity score (0-100) from RIM-OS v2</li>
+                                        <li>Risk classification with anomaly summary</li>
+                                        <li>Optional PDF, HTML, and SVG report artifacts</li>
                                     </ul>
                                 </div>
                             </div>
@@ -324,7 +349,6 @@ export default function UploadPage() {
                     </div>
                 ) : (
                     <div className="space-y-8">
-                        {/* File Info */}
                         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 space-y-6">
                             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                 <div>
@@ -357,7 +381,7 @@ export default function UploadPage() {
                                     </div>
                                     <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-50/80 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                                         <ShieldCheck className="w-3 h-3" />
-                                        <span>RIM‑OS v2 canonical engine</span>
+                                        <span>RIM-OS v2 canonical engine</span>
                                     </div>
                                 </div>
                             </div>
@@ -366,10 +390,17 @@ export default function UploadPage() {
                                 kpis={uploadData.kpis}
                                 verification={uploadData.verification}
                                 fileHash={uploadData.fileHash}
+                                metadata={uploadData.metadata}
                             />
 
-                            {/* Download Report Buttons */}
                             <div className="mt-6 flex flex-wrap gap-4">
+                                <Link
+                                    href={`/report/${uploadData.uploadId}`}
+                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    View Audit Report
+                                </Link>
                                 <a
                                     href={`${API_URL}/api/report/${uploadData.uploadId}/pdf`}
                                     download={`pass97_report_${uploadData.uploadId}.pdf`}
@@ -389,12 +420,10 @@ export default function UploadPage() {
                             </div>
                         </div>
 
-                        {/* Mint Flow */}
                         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
                             <MintFlow uploadData={uploadData} />
                         </div>
 
-                        {/* Reset Button */}
                         <div className="text-center">
                             <button
                                 onClick={() => {

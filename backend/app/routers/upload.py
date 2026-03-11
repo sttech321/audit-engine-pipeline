@@ -25,6 +25,8 @@ from app.services.abuse_protection import (
 )
 from app.services.rim_wrapper import run_rim_audit
 from app.services.file_validation import (
+    SUPPORTED_EXTENSIONS,
+    get_file_extension,
     read_file_streaming,
     validate_file_extension,
     validate_file_size,
@@ -69,7 +71,10 @@ async def upload_audit_file(
     """
     Upload and process an audit artifact file.
     
-    This endpoint supports .lm3z, .rim0, and .rim95 artifact formats.
+    This endpoint accepts any file extension.
+    PASS97-native formats (.lm3z, .rim0, .rim95) receive the full audit
+    pipeline; other extensions receive limited analysis but still
+    produce a structured report.
     
     New additive features (all backward compatible):
     - File extension validation
@@ -80,12 +85,16 @@ async def upload_audit_file(
     - Structured error responses
     """
     try:
-        # ─── Stage 0a: Extension Validation (Additive) ───────────────────────
+        # ─── Stage 0a: Extension Awareness (Additive) ────────────────────────
+        # We no longer reject purely on file extension. Instead, we track
+        # whether the artifact is in a PASS97-native format so that the
+        # response can distinguish "full audit" vs "limited analysis".
+        ext = get_file_extension(file.filename or "")
+        is_supported_format = ext in SUPPORTED_EXTENSIONS
         if settings.validate_file_extension:
-            ext_valid, ext_error = validate_file_extension(file.filename or "")
-            if not ext_valid:
-                logger.warning(f"Rejected invalid extension: {file.filename}")
-                raise_structured_error(ext_error, status_code=422)
+            # Kept for backward compatibility with callers that expect this
+            # hook to run, but it will not reject on extension anymore.
+            validate_file_extension(file.filename or "")
         
         # ─── Stage 0b: MIME Type Validation (Additive) ───────────────────────
         if settings.validate_mime_type:
@@ -398,13 +407,27 @@ async def upload_audit_file(
             record_upload(contents)
 
         # ─── Build Response (Unchanged Schema) ───────────────────────────────
+        # Verification mode annotation for report/dashboard consumers.
+        if is_supported_format:
+            verification_mode = "Full PASS97 Audit"
+            verification_mode_key = "full"
+            verification_mode_reason = None
+        else:
+            verification_mode = "Limited Analysis"
+            verification_mode_key = "limited"
+            verification_mode_reason = (
+                "File type not in PASS97-native formats (.lm3z, .rim0, .rim95); "
+                "RIM-OS metrics computed, but format-specific semantics may be unavailable."
+            )
+
         response_metadata = {
             "name": f"Audit Report: {file.filename}",
             "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
             "attributes": [
                 {"trait_type": "Audit Score", "value": dynamic_score},
                 {"trait_type": "Status", "value": dynamic_status}
-            ]
+            ],
+            "verification_mode": verification_mode_key,
         }
         
         # Add signature verification result if available
@@ -420,6 +443,9 @@ async def upload_audit_file(
             response_metadata["artifact_version"] = meta.version
             if meta.artifact_id:
                 response_metadata["artifact_id"] = meta.artifact_id
+
+        if verification_mode_reason:
+            response_metadata["verification_mode_reason"] = verification_mode_reason
 
         return UploadResponse(
             fileInfo=FileInfo(name=file.filename, size=file_size, type=file.content_type or "application/octet-stream"),
