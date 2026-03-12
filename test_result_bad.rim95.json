@@ -1,0 +1,101 @@
+{
+  "fileInfo": {
+    "name": "bad.rim95",
+    "size": 8,
+    "type": "application/octet-stream"
+  },
+  "kpis": [
+    {
+      "id": "kpi-1",
+      "label": "Audit Score",
+      "value": 33.0,
+      "trend": "down",
+      "status": "warning",
+      "description": "RIM-OS integrity score (0\u2013100)"
+    },
+    {
+      "id": "kpi-2",
+      "label": "Issues Found",
+      "value": 0,
+      "trend": "down",
+      "status": "warning",
+      "description": "Count of anomalous chunks detected by RIM-OS"
+    },
+    {
+      "id": "kpi-3",
+      "label": "KAG Score",
+      "value": "0.9045",
+      "trend": "up",
+      "status": "warning",
+      "description": "Average KAG separability from RIM-OS"
+    },
+    {
+      "id": "kpi-4",
+      "label": "Coverage",
+      "value": "100.0%",
+      "trend": "up",
+      "status": "warning",
+      "description": "1 \u2212 anomaly_fraction, scaled to percentage"
+    },
+    {
+      "id": "kpi-5",
+      "label": "Penrose Sector",
+      "value": 0,
+      "trend": "stable",
+      "status": "warning",
+      "description": "Penrose details are now handled solely inside RIM-OS"
+    }
+  ],
+  "verification": {
+    "status": "Verification Failed",
+    "confidence": 33,
+    "timestamp": "2026-03-12T19:10:54Z",
+    "checks": [
+      "Stage 1 - Schema & Genesis: OK",
+      "Stage 2 - Entropy: avg_entropy_bits=2.4056",
+      "Stage 3 - Penrose geometry: avg_penrose_match=0.3596",
+      "Stage 4 - Anomalies: anomaly_fraction=0.0000, count=0",
+      "Stage 5 - Risk: risk_level=HIGH"
+    ]
+  },
+  "fileHash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
+  "uploadId": "5d37edae-1f1a-40d1-b92e-d28dd21b97c3",
+  "metadata": {
+    "name": "Audit Report: bad.rim95",
+    "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
+    "attributes": [
+      {
+        "trait_type": "Audit Score",
+        "value": 33.0
+      },
+      {
+        "trait_type": "Status",
+        "value": "Verification Failed"
+      }
+    ],
+    "verification_mode": "full"
+  },
+  "artifactBlock": {
+    "index": 52,
+    "timestamp": "2026-03-12T19:10:54Z",
+    "artifact_hash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
+    "tau_vectors": [
+      0.07429003396695089,
+      0.17605025064829538,
+      0.21731081611628023,
+      0.6717563449071897,
+      0.18591825733068623
+    ],
+    "manifold_hash": "8846269f931e6f5034481d35a9588ecd3d75ab306585cbd554f695fab830dc70",
+    "tile_hash": "44d4182e89eb89f21e8d04b7c35a811eea0ee4323adce725264b89fec1f03c62",
+    "barycentric": [
+      0.3373869419611893,
+      0.36160310593776696,
+      0.3010099521010438
+    ],
+    "prev_block_hash": "b2eba72d1582b29ad4f4bff17a9b5730183207e2d51e8316cd1c1ade1549823a",
+    "block_hash": "18937950ee5dc00adb90058edf2bbe3c3ef3a5a6628051c37af42bdfef3053b9",
+    "type": null,
+    "anchors": null
+  }
+}

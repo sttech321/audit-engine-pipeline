@@ -5,6 +5,7 @@ import os
 from functools import lru_cache
 from typing import List
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -85,6 +86,18 @@ class Settings(BaseSettings):
     # Error handling
     use_structured_errors: bool = True  # Use structured error envelope
     hide_internal_errors: bool = True  # Prevent internal error leakage
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug_flag(cls, value):
+        """Accept common non-boolean env values used in local .env files."""
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"release", "prod", "production"}:
+                return False
+            if normalized in {"debug", "dev", "development"}:
+                return True
+        return value
 
 
 @lru_cache
