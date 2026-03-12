@@ -25,6 +25,7 @@ from app.services.abuse_protection import (
     check_abuse_protection,
     record_upload,
 )
+from eu_ai_act_layer import attach_to_report
 from app.services.rim_wrapper import run_rim_audit
 from app.services.file_validation import (
     SUPPORTED_EXTENSIONS,
@@ -245,6 +246,8 @@ async def upload_audit_file(
             except OSError:
                 pass
 
+        report = attach_to_report(report)
+
         summary = report.get("summary", {}) or {}
 
         # Minimal KPI/verification shim to preserve response shape.
@@ -389,6 +392,8 @@ async def upload_audit_file(
             anomalies=[],
             risk_badge=risk_badge,
             eu_ai_act=eu_ai_act,
+            EU_AI_ACT_FULL=report.get("EU_AI_ACT_FULL"),
+            EU_AI_ACT_HASH=report.get("EU_AI_ACT_HASH"),
             legal_disclosures=legal_disclosures,
             ledger=ledger_info,
             penrose_details=penrose_details,

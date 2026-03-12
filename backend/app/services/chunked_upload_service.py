@@ -25,6 +25,7 @@ from app.services.file_validation import (
     get_file_extension,
     validate_file_extension,
 )
+from eu_ai_act_layer import attach_to_report
 from app.services.rim_wrapper import run_rim_audit
 from app.services.artifact_chain import add_artifact_block
 from app.services.worker_executor import execute_in_worker
@@ -382,6 +383,8 @@ class ChunkedUploadService:
                 except OSError:
                     pass
 
+            report = attach_to_report(report)
+
             self._processing_progress[upload_id] = 100.0
 
             # Compute hash (streaming) in thread to avoid blocking
@@ -492,6 +495,8 @@ class ChunkedUploadService:
                 anomalies=[],
                 risk_badge=risk_badge,
                 eu_ai_act=eu_ai_act,
+                EU_AI_ACT_FULL=report.get("EU_AI_ACT_FULL"),
+                EU_AI_ACT_HASH=report.get("EU_AI_ACT_HASH"),
                 legal_disclosures=LegalDisclosures.default(),
                 ledger=ledger_info,
                 penrose_details=penrose_details,

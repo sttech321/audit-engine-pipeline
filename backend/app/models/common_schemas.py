@@ -251,6 +251,8 @@ class ExtendedAuditResult(BaseModel):
     anomalies: List[Anomaly]
     risk_badge: RiskBadge
     eu_ai_act: EUAIActCompliance
+    EU_AI_ACT_FULL: Optional[Dict[str, Any]] = None
+    EU_AI_ACT_HASH: Optional[str] = None
     ledger: Optional[LedgerInfo] = None
     legal_disclosures: LegalDisclosures
     

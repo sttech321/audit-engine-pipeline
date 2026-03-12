@@ -139,3 +139,20 @@ def test_api_extended_report_exposes_map_position(sample_valid_content):
     assert artifact_block["manifold_hash"] == map_position["manifold_hash"]
     assert artifact_block["tile_hash"] == map_position["tile_hash"]
 
+
+def test_api_extended_report_exposes_eu_ai_act_attachment(sample_valid_content):
+    """Extended report should include the additive EU AI Act attachment fields."""
+    resp = client.post("/api/upload", files=make_file("eu.rim95", sample_valid_content))
+    assert resp.status_code == 200
+    upload_id = resp.json()["uploadId"]
+
+    extended = client.get(f"/api/report/{upload_id}/extended")
+    assert extended.status_code == 200
+    data = extended.json()
+
+    assert "EU_AI_ACT_FULL" in data
+    assert "EU_AI_ACT_HASH" in data
+    assert isinstance(data["EU_AI_ACT_FULL"], dict)
+    assert isinstance(data["EU_AI_ACT_HASH"], str)
+    assert data["EU_AI_ACT_FULL"]["audit_hash"] == data["EU_AI_ACT_HASH"]
+

@@ -99,6 +99,41 @@ const parseCheck = (check: string) => {
   };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const formatJson = (value: unknown) => JSON.stringify(value, null, 2);
+
+const ARTICLE_KEYS = [
+  "Art_9_risk",
+  "Art_10_data",
+  "Art_11_docs",
+  "Art_12_logging",
+  "Art_13_transparency",
+  "Art_14_oversight",
+  "Art_15_robustness",
+] as const;
+
+const getArticleCards = (value: Record<string, unknown> | null) =>
+  ARTICLE_KEYS.map((key) => {
+    const block = value?.[key];
+    if (!isRecord(block)) return null;
+    return {
+      key,
+      title: String(block.article ?? key.replaceAll("_", " ")),
+      summary: String(
+        block.overall_assessment ??
+          block.description ??
+          block.data_quality_statement ??
+          block.documentation_status ??
+          block.transparency_status ??
+          block.oversight_status ??
+          block.robustness_status ??
+          "Assessment available in attached report.",
+      ),
+    };
+  }).filter((item): item is { key: string; title: string; summary: string } => item !== null);
+
 /* ── Reusable dark-glass section card ── */
 const Section = ({
   title,
@@ -151,6 +186,7 @@ export default function ReportPage() {
   const [report, setReport] = useState<ReportWithChain | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRawPayloadOpen, setIsRawPayloadOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -249,6 +285,20 @@ export default function ReportPage() {
         : status === "warning"
           ? "bg-amber-400/15 text-amber-300 border-amber-400/30"
           : "bg-slate-700/40 text-slate-400 border-white/10";
+
+  const euAiFull = isRecord(report.EU_AI_ACT_FULL) ? report.EU_AI_ACT_FULL : null;
+  const euAiConformity = euAiFull && isRecord(euAiFull.conformity) ? euAiFull.conformity : null;
+  const euAiMeta = euAiFull && isRecord(euAiFull.meta) ? euAiFull.meta : null;
+  const euAiArticles = getArticleCards(euAiFull);
+  const complianceStatus = String(
+    euAiConformity?.compliance_status ?? "NOT_AVAILABLE",
+  );
+  const complianceBadge =
+    complianceStatus === "PASS"
+      ? "bg-emerald-400/15 text-emerald-300 border-emerald-400/30"
+      : complianceStatus === "CONDITIONAL_PASS"
+        ? "bg-amber-400/15 text-amber-300 border-amber-400/30"
+        : "bg-red-500/15 text-red-300 border-red-500/30";
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#08111f] text-white">
@@ -606,11 +656,93 @@ export default function ReportPage() {
                   </p>
                 </InfoTile>
 
+                {report.EU_AI_ACT_HASH && (
+                  <InfoTile label="EU AI Act Report Hash" icon={Fingerprint} full>
+                    <p className="break-all font-mono text-xs leading-6 text-amber-200/70 rounded-xl border border-amber-300/15 bg-amber-300/5 p-3">
+                      {report.EU_AI_ACT_HASH}
+                    </p>
+                  </InfoTile>
+                )}
+
+                {euAiConformity && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <InfoTile label="EU AI Act Conformity">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-200">
+                          {complianceStatus.replaceAll("_", " ")}
+                        </p>
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${complianceBadge}`}
+                        >
+                          {complianceStatus.replaceAll("_", " ")}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-300">
+                        {String(euAiConformity.description ?? "Not available")}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Review required: {String(euAiConformity.human_review_needed ?? "unknown")}
+                      </p>
+                    </InfoTile>
+                    <InfoTile label="Layer Metadata">
+                      <p className="text-sm text-slate-300">
+                        {String(euAiMeta?.layer_version ?? "Unknown layer")}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Generated for schema {String(euAiMeta?.schema ?? "unknown")}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Target file: {String(euAiMeta?.target_file ?? "unknown")}
+                      </p>
+                    </InfoTile>
+                  </div>
+                )}
+
+                {euAiArticles.length > 0 && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {euAiArticles.map((article) => (
+                      <div
+                        key={article.key}
+                        className="rounded-2xl border border-white/8 bg-slate-900/60 p-5"
+                      >
+                        <p className="text-sm font-semibold text-slate-200">
+                          {article.title}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
+                          {article.summary}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <InfoTile label="Legal Scope" icon={ListChecks}>
                   <p className="text-sm text-slate-300">
                     {report.legal_disclosures.weight_space_scope}
                   </p>
                 </InfoTile>
+
+                {euAiFull && (
+                  <div className="rounded-2xl border border-white/8 bg-slate-900/60 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-200">
+                          EU AI Act Raw Payload
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Open the full attached payload in a dedicated viewer.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsRawPayloadOpen(true)}
+                        className="rounded-full border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-sky-300 transition hover:border-sky-300/50 hover:bg-sky-300/15"
+                      >
+                        View Payload
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </Section>
           </div>
@@ -734,6 +866,35 @@ export default function ReportPage() {
           </div>
         </div>
       </main>
+
+      {euAiFull && isRawPayloadOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-5xl rounded-[2rem] border border-white/10 bg-slate-950 shadow-2xl shadow-black/50">
+            <div className="flex items-center justify-between gap-4 border-b border-white/8 px-6 py-5">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  EU AI Act
+                </p>
+                <h2 className="mt-1 text-xl font-semibold text-white">
+                  Raw Payload
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRawPayloadOpen(false)}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:border-white/20 hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-6">
+              <pre className="max-h-[70vh] overflow-auto rounded-2xl border border-white/8 bg-[#020817] p-5 text-xs leading-6 text-slate-300">
+                {formatJson(euAiFull)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -117,6 +117,8 @@ export interface ExtendedAuditResult {
   anomalies: Anomaly[];
   risk_badge: RiskBadge;
   eu_ai_act: EuAiActCompliance;
+  EU_AI_ACT_FULL?: Record<string, unknown> | null;
+  EU_AI_ACT_HASH?: string | null;
   ledger?: LedgerInfo | null;
   legal_disclosures: LegalDisclosures;
   penrose_details?: Record<string, unknown> | null;

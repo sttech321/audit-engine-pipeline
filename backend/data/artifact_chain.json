@@ -1332,5 +1332,47 @@
     ],
     "prev_block_hash": "7736c5346529f41d0e1c2e1393675d75b9a9db8687fe1f2ef5a6fe828dcff413",
     "block_hash": "35e9d1985e8dfa6651abd2e3aff42e51e814c9afe61dfb0d3fdc1d5d3c701899"
+  },
+  {
+    "index": 64,
+    "timestamp": "2026-03-12T21:19:22Z",
+    "artifact_hash": "04a6bd8e01eda70d0149497135571d80801f72e952e90dbae1220fe89f972efe",
+    "tau_vectors": [
+      0.6947276385793251,
+      0.9180794518773999,
+      0.36172949543841715,
+      0.849222027317887,
+      0.7509869812657821
+    ],
+    "manifold_hash": "6c955a293aa73aed9883c8088fd341eee197e13e248fb7a0fff1c09f173d9680",
+    "tile_hash": "37d11050f74f02794b90180cbc82c5881c5d383dcc3d3abf446d257bd40e4b56",
+    "barycentric": [
+      0.25556149358839997,
+      0.4496385342155725,
+      0.2947999721960275
+    ],
+    "prev_block_hash": "35e9d1985e8dfa6651abd2e3aff42e51e814c9afe61dfb0d3fdc1d5d3c701899",
+    "block_hash": "156581cf03ed24a2d134bdb2a6c1c94ae9f6a8c8e43f05eca3942db4764d5bd8"
+  },
+  {
+    "index": 65,
+    "timestamp": "2026-03-12T21:38:58Z",
+    "artifact_hash": "04a6bd8e01eda70d0149497135571d80801f72e952e90dbae1220fe89f972efe",
+    "tau_vectors": [
+      0.6947276385793251,
+      0.9180794518773999,
+      0.36172949543841715,
+      0.849222027317887,
+      0.7509869812657821
+    ],
+    "manifold_hash": "6c955a293aa73aed9883c8088fd341eee197e13e248fb7a0fff1c09f173d9680",
+    "tile_hash": "37d11050f74f02794b90180cbc82c5881c5d383dcc3d3abf446d257bd40e4b56",
+    "barycentric": [
+      0.25556149358839997,
+      0.4496385342155725,
+      0.2947999721960275
+    ],
+    "prev_block_hash": "156581cf03ed24a2d134bdb2a6c1c94ae9f6a8c8e43f05eca3942db4764d5bd8",
+    "block_hash": "bfa6de935d7409efa83c5eb9483fdc11128f43e0c3bce64c51377888c792cb71"
   }
 ]
