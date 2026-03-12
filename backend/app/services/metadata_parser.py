@@ -66,10 +66,7 @@ def detect_format(contents: bytes, filename: str) -> ArtifactFormat:
     if magic == RIM0_MAGIC:
         return ArtifactFormat.RIM0
     
-    # Accept both canonical (RIM95) and compact (R95\x00) RIM95 magic
-    if contents.startswith(b"RIM95"):
-        return ArtifactFormat.RIM95
-    if contents.startswith(b"R95"):
+    if magic == RIM95_MAGIC:
         return ArtifactFormat.RIM95
     
     return ArtifactFormat.UNKNOWN

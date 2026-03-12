@@ -31,6 +31,12 @@ def test_valid_rim95_extension(sample_valid_content):
     assert r.status_code == 200
 
 
+def test_valid_safetensors_extension(sample_valid_content):
+    """Files with .safetensors extension should be accepted."""
+    r = client.post("/api/upload", files=make_file("test.safetensors", sample_valid_content))
+    assert r.status_code == 200
+
+
 def test_invalid_extension_txt(sample_valid_content):
     """Files with .txt extension should be rejected."""
     r = client.post("/api/upload", files=make_file("test.txt", sample_valid_content))
@@ -70,6 +76,10 @@ def test_case_insensitive_extension(sample_valid_content):
     
     clear_stores()  # Clear stores to allow same content upload
     r = client.post("/api/upload", files=make_file("test.Lm3z", sample_valid_content))
+    assert r.status_code == 200
+
+    clear_stores()
+    r = client.post("/api/upload", files=make_file("test.SafeTensors", sample_valid_content))
     assert r.status_code == 200
 
 

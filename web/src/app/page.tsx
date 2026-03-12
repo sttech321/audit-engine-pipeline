@@ -1,254 +1,522 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { Shield, Upload, CheckCircle, Coins, ArrowRight, ChevronRight } from 'lucide-react';
+import React from "react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import {
+  Shield,
+  Upload,
+  ArrowRight,
+  Binary,
+  Cpu,
+  GitBranch,
+  Hexagon,
+  Waves,
+  Fingerprint,
+  Atom,
+  FlaskConical,
+  Infinity,
+} from "lucide-react";
+
+/* ─── Inline Penrose-inspired SVG background ─── */
+function PenroseBackground() {
+  const phi = 1.6180339887;
+  const lines: React.ReactElement[] = [];
+  const W = 1200,
+    H = 800;
+  const FAMILIES = 5;
+
+  for (let f = 0; f < FAMILIES; f++) {
+    const angle = (f * Math.PI * 2) / FAMILIES;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const spacing = 80 * phi;
+    for (let k = -4; k <= 4; k++) {
+      const ox = W / 2 + cos * spacing * k;
+      const oy = H / 2 + sin * spacing * k;
+      const len = 900;
+      const nx = -sin,
+        ny = cos;
+      const x1 = ox - nx * len,
+        y1 = oy - ny * len;
+      const x2 = ox + nx * len,
+        y2 = oy + ny * len;
+      lines.push(
+        <line
+          key={`${f}-${k}`}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={
+            f === 0
+              ? "rgba(251,191,36,0.12)"
+              : f === 1
+                ? "rgba(56,189,248,0.10)"
+                : f === 2
+                  ? "rgba(168,85,247,0.09)"
+                  : f === 3
+                    ? "rgba(251,191,36,0.07)"
+                    : "rgba(56,189,248,0.07)"
+          }
+          strokeWidth="0.8"
+          strokeDasharray="4 8"
+        />,
+      );
+    }
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMid slice"
+      className="absolute inset-0 w-full h-full opacity-60"
+      aria-hidden="true"
+    >
+      <defs>
+        <radialGradient id="bg-fade" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stopColor="rgba(8,17,31,0)" />
+          <stop offset="100%" stopColor="rgba(8,17,31,0.95)" />
+        </radialGradient>
+      </defs>
+      {lines}
+      <rect x="0" y="0" width={W} height={H} fill="url(#bg-fade)" />
+    </svg>
+  );
+}
+
+const ClientPenroseBackground = dynamic(
+  () => Promise.resolve(PenroseBackground),
+  { ssr: false },
+);
+
+/* ─── Floating star particles ─── */
+function Stars() {
+  const stars = [
+    { x: "8%", y: "12%", s: 2, dur: "3.2s", delay: "0s" },
+    { x: "92%", y: "8%", s: 1.5, dur: "4.5s", delay: "1s" },
+    { x: "20%", y: "55%", s: 1, dur: "2.8s", delay: "0.5s" },
+    { x: "78%", y: "40%", s: 2.5, dur: "5s", delay: "2s" },
+    { x: "50%", y: "25%", s: 1, dur: "3.8s", delay: "1.5s" },
+    { x: "65%", y: "72%", s: 2, dur: "4s", delay: "0.8s" },
+    { x: "35%", y: "85%", s: 1.5, dur: "3s", delay: "2.5s" },
+    { x: "12%", y: "70%", s: 1, dur: "5.5s", delay: "0.3s" },
+    { x: "85%", y: "65%", s: 2, dur: "3.5s", delay: "1.8s" },
+    { x: "45%", y: "15%", s: 1.5, dur: "4.2s", delay: "0.6s" },
+  ];
+  return (
+    <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+      {stars.map((s, i) => (
+        <div
+          key={i}
+          className="star"
+          style={
+            {
+              left: s.x,
+              top: s.y,
+              width: s.s,
+              height: s.s,
+              "--dur": s.dur,
+              "--delay": s.delay,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ─── Genesis Mint card ─── */
+function GenesisMint({
+  symbol,
+  name,
+  equation,
+  description,
+  color,
+}: {
+  symbol: string;
+  name: string;
+  equation: string;
+  description: string;
+  color: "amber" | "sky" | "violet";
+}) {
+  const colorMap = {
+    amber: {
+      glow: "glow-amber",
+      glass: "glass-amber",
+      text: "text-amber-200",
+      sub: "text-amber-100/70",
+      badge: "bg-amber-300/15 text-amber-200",
+    },
+    sky: {
+      glow: "glow-sky",
+      glass: "glass-sky",
+      text: "text-sky-200",
+      sub: "text-sky-100/70",
+      badge: "bg-sky-300/15 text-sky-200",
+    },
+    violet: {
+      glow: "glow-violet",
+      glass: "glass-violet",
+      text: "text-violet-200",
+      sub: "text-violet-100/70",
+      badge: "bg-violet-300/15 text-violet-200",
+    },
+  };
+  const c = colorMap[color];
+  return (
+    <div
+      className={`relative rounded-[2rem] p-8 ${c.glass} ${c.glow} overflow-hidden`}
+    >
+      <div className="absolute top-4 right-4">
+        <span
+          className={`text-xs font-semibold px-3 py-1.5 rounded-full uppercase tracking-widest ${c.badge}`}
+        >
+          Fixed Star
+        </span>
+      </div>
+      <p className={`font-mono text-5xl font-bold leading-none ${c.text}`}>
+        {symbol}
+      </p>
+      <p className={`mt-4 text-xs uppercase tracking-[0.22em] ${c.sub}`}>
+        {name}
+      </p>
+      <p className={`mt-2 font-mono text-sm ${c.text}`}>{equation}</p>
+      <p className="mt-4 text-sm leading-6 text-slate-300">{description}</p>
+    </div>
+  );
+}
+
+/* ─── Pipeline step ─── */
+function PipelineStep({
+  num,
+  icon: Icon,
+  title,
+  body,
+  accent,
+}: {
+  num: string;
+  icon: React.ElementType;
+  title: string;
+  body: string;
+  accent: string;
+}) {
+  return (
+    <div className="relative flex flex-col gap-4 rounded-[1.75rem] border border-white/8 bg-slate-950/50 p-7 backdrop-blur">
+      <div className="flex items-center gap-3">
+        <span className="font-mono text-xs font-semibold tracking-[0.2em] text-slate-500">
+          {num}
+        </span>
+        <Icon className={`h-5 w-5 ${accent}`} />
+      </div>
+      <h4 className="text-xl font-semibold text-white">{title}</h4>
+      <p className="text-sm leading-7 text-slate-400">{body}</p>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-blue-950 dark:to-purple-950">
-      {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+    <div className="relative min-h-screen overflow-hidden bg-[#08111f] text-white">
+      {/* ── Global background ── */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        {/* Radial glow layers */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(251,191,36,0.16),transparent),radial-gradient(ellipse_50%_40%_at_80%_20%,rgba(56,189,248,0.12),transparent),radial-gradient(ellipse_40%_35%_at_20%_60%,rgba(168,85,247,0.10),transparent)]" />
+        {/* Penrose lines — client-only to avoid floating-point SSR mismatch */}
+        <ClientPenroseBackground />
+        {/* Star particles */}
+        <Stars />
+      </div>
+
+      {/* ── Header ── */}
+      <header className="relative z-50 border-b border-white/8 glass">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Shield className="w-8 h-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                Audit NFT Minter
-              </h1>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Shield className="h-9 w-9 text-amber-300 animate-pulse-glow" />
+                <div className="absolute inset-0 rounded-full bg-amber-300/20 blur-md" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold tracking-[0.18em] text-slate-100 uppercase">
+                  Pass97
+                </h1>
+                <p className="text-[10px] tracking-[0.3em] text-slate-500 uppercase">
+                  Audit Engine Pipeline
+                </p>
+              </div>
             </div>
-            <WalletMultiButton className="!bg-blue-600 hover:!bg-blue-700" />
+            <WalletMultiButton className="!bg-amber-500 !text-slate-950 hover:!bg-amber-400 !rounded-xl !font-semibold" />
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="text-center mb-16">
-          <h2 className="text-5xl md:text-6xl font-bold text-gray-900 dark:text-gray-100 mb-6">
-            Cryptographic Audit
-            <br />
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Verification & NFT Minting
-            </span>
-          </h2>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto mb-8">
-            Upload, verify, and mint cryptographic audit artifacts as NFTs on Solana.
-            Ensure provenance and integrity with deterministic verification.
-          </p>
-          <Link
-            href="/upload"
-            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
-          >
-            <Upload className="w-5 h-5" />
-            Upload Audit File
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-        </div>
-
-        {/* How It Works - Process Overview */}
-        <div className="mb-16">
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 text-center">
-            How It Works
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400 text-center max-w-2xl mx-auto mb-10">
-            Your file flows through three stages. Each step is deterministic—same file always produces the same result.
-          </p>
-        </div>
-
-        {/* Process Steps - Enhanced with flow arrows */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-6 mb-16">
-          {/* Step 1 */}
-          <div className="group relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-2xl transition-all duration-300">
-            <div className="absolute top-6 right-6 w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center">
-              1
+      {/* ── Hero ── */}
+      <main className="relative z-10">
+        <section className="mx-auto max-w-7xl px-4 pt-24 pb-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-4xl text-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-5 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-200">
+              <Atom className="h-3.5 w-3.5" />
+              Mathematical cartography for binary systems
             </div>
-            <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Upload className="w-7 h-7 text-blue-600 dark:text-blue-400" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-              Upload & Analyze
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Drop your audit artifact — any file type can be uploaded.{" "}
-              Full verification is supported for{" "}
-              <span className="font-mono text-sm">.lm3z</span>,{" "}
-              <span className="font-mono text-sm">.rim0</span>,{" "}
-              and <span className="font-mono text-sm">.rim95</span>{" "}
-              artifacts. Other file types will receive limited analysis.
+
+            <h2 className="mt-8 text-6xl font-semibold leading-[1.08] tracking-tight text-white md:text-8xl">
+              A mathematical{" "}
+              <span className="block text-gradient-spectrum animate-gradient">
+                journey through space
+              </span>
+            </h2>
+
+            <p className="mx-auto mt-8 max-w-3xl text-lg leading-8 text-slate-300 md:text-xl">
+              Binary data enters as raw bytes. Each byte maps to a prime —
+              building an exponential constellation.{" "}
+              <span className="text-amber-200/80">The Gödel encoding.</span>{" "}
+              This crystallises into a{" "}
+              <span className="text-sky-200/80">
+                p-adic ultrametric structure
+              </span>
+              , then a{" "}
+              <span className="text-violet-200/80">spectral signature</span>{" "}
+              unique to this data — and finally a position on a{" "}
+              <span className="text-amber-200/80">Penrose tiling</span> that
+              never repeats yet is everywhere locally consistent.
             </p>
-            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                <span>RIM-OS v2 splits the file into 1 MB chunks and runs the audit pipeline</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                <span>You get KPIs: integrity score, anomaly count, KAG separability, Penrose match</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                <span>Large files (100+ MB) use parallel chunked upload—progress shown in real time</span>
-              </li>
-            </ul>
-            <div className="hidden md:flex absolute -right-8 top-1/2 -translate-y-1/2 z-10 text-gray-300 dark:text-gray-500">
-              <ArrowRight className="w-6 h-6" />
+
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+              <Link
+                href="/upload"
+                className="inline-flex items-center gap-2.5 rounded-2xl bg-amber-400 px-8 py-4 text-sm font-semibold text-slate-950 transition-all hover:bg-amber-300 hover:shadow-[0_0_32px_rgba(251,191,36,0.5)] active:scale-[.98]"
+              >
+                <Upload className="h-5 w-5" />
+                Begin the mapping
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+              <div className="rounded-2xl border border-white/10 bg-white/4 px-6 py-4 text-sm text-slate-400 backdrop-blur">
+                Native <span className="font-mono text-amber-200">.lm3z</span>{" "}
+                <span className="font-mono text-amber-200">.rim0</span>{" "}
+                <span className="font-mono text-amber-200">.rim95</span>{" "}
+                <span className="font-mono text-amber-200">.safetensors</span>{" "}
+                receive the deepest verification path
+              </div>
             </div>
           </div>
+        </section>
 
-          {/* Step 2 */}
-          <div className="group relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-700 hover:shadow-2xl transition-all duration-300">
-            <div className="absolute top-6 right-6 w-8 h-8 rounded-full bg-green-600 text-white text-sm font-bold flex items-center justify-center">
-              2
-            </div>
-            <div className="w-14 h-14 bg-green-100 dark:bg-green-900 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <CheckCircle className="w-7 h-7 text-green-600 dark:text-green-400" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-              Verify Cryptographically
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Every audit is deterministic—same input always yields the same verification.
+        {/* ── Pipeline stages ── */}
+        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mb-12 text-center">
+            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+              Pipeline
             </p>
-            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                <span>SHA-256 hash of the file serves as the canonical fingerprint</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                <span>Ed25519 signature check when your artifact includes signed metadata</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                <span>Risk level: LOW (score ≥90), MEDIUM (70–89), HIGH (&lt;70)</span>
-              </li>
-            </ul>
-            <div className="hidden md:flex absolute -right-8 top-1/2 -translate-y-1/2 z-10 text-gray-300 dark:text-gray-500">
-              <ArrowRight className="w-6 h-6" />
-            </div>
-          </div>
-
-          {/* Step 3 */}
-          <div className="group relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-2xl transition-all duration-300">
-            <div className="absolute top-6 right-6 w-8 h-8 rounded-full bg-purple-600 text-white text-sm font-bold flex items-center justify-center">
-              3
-            </div>
-            <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Coins className="w-7 h-7 text-purple-600 dark:text-purple-400" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-              Mint as NFT
+            <h3 className="mt-3 text-4xl font-semibold text-white md:text-5xl">
+              From binary body to{" "}
+              <span className="text-gradient-gold">geometric thought</span>
             </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Turn your audit result into a provable on-chain token.
+            <p className="mx-auto mt-4 max-w-2xl text-base text-slate-400">
+              Five deterministic stages transform any artifact into a unique,
+              addressable position in an infinite aperiodic landscape.
             </p>
-            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
-                <span>Connect your Solana wallet and mint in one click</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
-                <span>Metadata stored on IPFS; verification hash embedded on-chain</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <ChevronRight className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
-                <span>NFT proves provenance—no model weights or raw data ever stored</span>
-              </li>
-            </ul>
           </div>
-        </div>
 
-        {/* Core Principles */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border border-gray-200 dark:border-gray-700">
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2 text-center">
-            Core Principles
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400 text-center text-sm mb-8 max-w-xl mx-auto">
-            We verify integrity without touching your model. Here&apos;s what we do—and what we never do.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/50">
-              <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0 mt-1">
-                <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-              </div>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <PipelineStep
+              num="01"
+              icon={Binary}
+              title="Gödel Encoding"
+              body="Raw bytes map to prime indices. Each byte becomes an exponent; the product is a single integer carrying the full sequence."
+              accent="text-amber-300"
+            />
+            <PipelineStep
+              num="02"
+              icon={Hexagon}
+              title="p-adic Ultrametric"
+              body="The Gödel number folds into itself by divisibility, revealing hidden hierarchical order invisible in the linear representation."
+              accent="text-sky-300"
+            />
+            <PipelineStep
+              num="03"
+              icon={Waves}
+              title="NTT Spectrum"
+              body="A Number Theoretic Transform sweeps the structure like a prism, decomposing it into frequency components over a finite field."
+              accent="text-violet-300"
+            />
+            <PipelineStep
+              num="04"
+              icon={Fingerprint}
+              title="KA Separability"
+              body="Row and column means are compared — the Kolmogorov-Arnold test. Where separable, a coherent directional fingerprint emerges."
+              accent="text-amber-300"
+            />
+            <PipelineStep
+              num="05"
+              icon={Cpu}
+              title="Penrose Projection"
+              body="The vector lands on an infinite aperiodic tiling at golden-ratio angles. Memory is proximity. Learning is the trajectory shortening."
+              accent="text-sky-300"
+            />
+          </div>
+        </section>
+
+        {/* ── Genesis Mints ── */}
+        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mb-12 text-center">
+            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+              Genesis Mints
+            </p>
+            <h3 className="mt-3 text-4xl font-semibold text-white md:text-5xl">
+              Fixed stars anchor the map
+            </h3>
+            <p className="mx-auto mt-4 max-w-2xl text-base text-slate-400">
+              Three physics constants that existed before any computer —
+              immutable coordinates that never depend on any model, vendor, or
+              runtime state.
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <GenesisMint
+              symbol="α"
+              name="Fine-Structure Constant"
+              equation="α ≈ 1/137.035999084"
+              description="The dimensionless coupling constant of electromagnetism. Fixed by experiment to 12 significant figures — it will never be patched by a software update."
+              color="amber"
+            />
+            <GenesisMint
+              symbol="Gμν"
+              name="Einstein Field Equations"
+              equation="Gμν + Λgμν = 8πG/c⁴ · Tμν"
+              description="The geometry of spacetime is the content of matter and energy. A relation that curved coordinates around every massive body, discoverable from first principles."
+              color="sky"
+            />
+            <GenesisMint
+              symbol="S"
+              name="Boltzmann Entropy"
+              equation="S = k_B · ln Ω"
+              description="The bridge between the microscopic and the thermodynamic. The number of distinct arrangements a system can occupy — the deepest definition of disorder."
+              color="violet"
+            />
+          </div>
+        </section>
+
+        {/* ── Learning graph section ── */}
+        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="rounded-[2.5rem] border border-white/8 bg-slate-950/50 p-10 backdrop-blur lg:p-14">
+            <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
               <div>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">
-                  Deterministic Verification
+                <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+                  Geometry of Intelligence
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Same file → same result every time. We use only hashes and metadata; no randomness.
+                <h3 className="mt-4 text-4xl font-semibold text-white leading-tight">
+                  The learning graph is a{" "}
+                  <span className="text-gradient-spectrum animate-gradient">
+                    living geometry
+                  </span>
+                </h3>
+                <p className="mt-6 text-base leading-8 text-slate-300">
+                  An AI model maps its own weights through the same pipeline. It
+                  finds its position on the Penrose tiling —{" "}
+                  <span className="text-amber-200">body</span>. Then maps its
+                  activation patterns —{" "}
+                  <span className="text-sky-200">thought</span>. A trajectory
+                  forms between them.
                 </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/50">
-              <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0 mt-1">
-                <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">
-                  Provenance, Not Data
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  NFTs prove your audit passed. They don&apos;t contain or expose your model weights.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50/30 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50">
-              <div className="w-6 h-6 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center flex-shrink-0 mt-1">
-                <span className="text-red-600 dark:text-red-400 text-xs font-bold">✕</span>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">
-                  No Model Weights
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  We never run AI inference or reconstruct your model. Audit only.
+                <p className="mt-4 text-base leading-8 text-slate-300">
+                  When a new question arrives, it finds its position relative to
+                  where the model has been before.{" "}
+                  <em className="text-white not-italic">
+                    Memory is proximity.
+                  </em>{" "}
+                  <em className="text-white not-italic">
+                    Understanding is recognising a familiar neighbourhood.
+                  </em>{" "}
+                  <em className="text-white not-italic">
+                    Learning is the trajectory growing shorter.
+                  </em>
                 </p>
               </div>
-            </div>
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50/30 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50">
-              <div className="w-6 h-6 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center flex-shrink-0 mt-1">
-                <span className="text-red-600 dark:text-red-400 text-xs font-bold">✕</span>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">
-                  No Raw Data Storage
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  We process your file, produce a report, then discard it. Only commitments are kept.
-                </p>
+
+              <div className="grid gap-5 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                {[
+                  {
+                    label: "Memory",
+                    val: "Proximity",
+                    icon: GitBranch,
+                    accent: "text-amber-300",
+                    bg: "glass-amber",
+                  },
+                  {
+                    label: "Understanding",
+                    val: "Neighbourhood",
+                    icon: Hexagon,
+                    accent: "text-sky-300",
+                    bg: "glass-sky",
+                  },
+                  {
+                    label: "Learning",
+                    val: "Trajectory",
+                    icon: Waves,
+                    accent: "text-violet-300",
+                    bg: "glass-violet",
+                  },
+                ].map(({ label, val, icon: Icon, accent, bg }) => (
+                  <div key={label} className={`rounded-2xl p-6 ${bg}`}>
+                    <Icon className={`h-6 w-6 ${accent}`} />
+                    <p className="mt-3 text-xs uppercase tracking-[0.2em] text-slate-500">
+                      {label}
+                    </p>
+                    <p className={`mt-1 text-2xl font-semibold ${accent}`}>
+                      {val}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Quick Links */}
-        <div className="mt-12 flex flex-wrap justify-center gap-4">
-          <Link
-            href="/upload"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-          >
-            Start upload
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-          <span className="text-gray-400 dark:text-gray-500 self-center">|</span>
-          <p className="text-sm text-gray-500 dark:text-gray-400 self-center">
-            Any file type can be uploaded. Full verification is available for{" "}
-            <span className="font-mono">.lm3z</span>,{" "}
-            <span className="font-mono">.rim0</span>,{" "}
-            <span className="font-mono">.rim95</span>; other files receive limited analysis.
-          </p>
-        </div>
+        {/* ── Formats & CTA banner ── */}
+        <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-6 rounded-[2rem] border border-amber-300/20 bg-amber-300/6 p-8 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-amber-200/70 mb-2">
+                Native Formats
+              </p>
+              <p className="text-base leading-7 text-slate-300">
+                <span className="font-mono text-amber-200">.lm3z</span>{" "}
+                <span className="font-mono text-amber-200">.rim0</span>{" "}
+                <span className="font-mono text-amber-200">.rim95</span>{" "}
+                <span className="font-mono text-amber-200">.safetensors</span>{" "}
+                use the full verification route with PASS97 deep audit.
+              </p>
+            </div>
+            <Link
+              href="/upload"
+              className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-amber-300/40 bg-amber-300/15 px-6 py-3.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-300/25 whitespace-nowrap"
+            >
+              Open upload flow
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <p className="text-center text-gray-600 dark:text-gray-400">
-            Built with Next.js, Solana, and Metaplex • Devnet
-          </p>
+      {/* ── Footer ── */}
+      <footer className="relative z-10 border-t border-white/8 glass">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <div className="flex items-center gap-2 text-slate-500 text-sm">
+              <Shield className="h-4 w-4 text-amber-300/60" />
+              <span>Pass97 · Audit Engine Pipeline</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-600 text-xs font-mono">
+              <FlaskConical className="h-3.5 w-3.5 text-violet-400/60" />
+              <span>
+                α · G<sub>μν</sub> · S = k<sub>B</sub> ln Ω
+              </span>
+              <Infinity className="h-3.5 w-3.5 text-sky-400/60" />
+            </div>
+          </div>
         </div>
       </footer>
     </div>

@@ -153,8 +153,8 @@ export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
                 <div className="space-y-4">
                     <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                         <p className="text-sm text-blue-700 dark:text-blue-400">
-                            <strong>Note:</strong> Minting will upload your audit file and metadata to IPFS,
-                            then create an NFT on Solana Devnet. This may take a few moments.
+                            <strong>Optional:</strong> Minting will upload the artifact certificate metadata to IPFS,
+                            then create an NFT on Solana Devnet representing this mapped position. This may take a few moments.
                         </p>
                     </div>
 
@@ -176,12 +176,12 @@ export const MintFlow: FC<MintFlowProps> = ({ uploadData }) => {
                         {isMinting ? (
                             <>
                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                Minting NFT...
+                                Minting certificate...
                             </>
                         ) : (
                             <>
                                 <Coins className="w-5 h-5" />
-                                Mint Audit NFT
+                                Mint Position Certificate
                             </>
                         )}
                     </button>

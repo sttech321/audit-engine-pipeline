@@ -39,5 +39,5 @@ def extract_penrose_from_report(report: Dict[str, Any], fallback_hash: str = "")
         "sector": int(tau_omega * 5) % 5,
         "penrose_hash": manifold_hash,
         "tau": tau_omega,
-        "tile_hash": next_state[:16] if next_state else "",
+        "tile_hash": first_chunk.get("tile_hash") or (next_state[:16] if next_state else ""),
     }

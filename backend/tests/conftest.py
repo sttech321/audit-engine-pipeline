@@ -185,6 +185,12 @@ def reset_settings_cache():
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def isolate_artifact_chain_path(monkeypatch, tmp_path):
+    """Give each test an isolated local artifact chain file."""
+    monkeypatch.setenv("ARTIFACT_CHAIN_PATH", str(tmp_path / "artifact_chain.json"))
+
+
 @pytest.fixture
 def disable_abuse_protection(monkeypatch):
     """Disable abuse protection for tests that need multiple uploads."""

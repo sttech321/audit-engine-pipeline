@@ -1,26 +1,212 @@
 @import "tailwindcss";
 
+/* ── Deep-space palette ── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --gold: 251 191 36;
+  --sky: 56 189 248;
+  --violet: 168 85 247;
+  --deep: 8 17 31;
+
+  --background: #08111f;
+  --foreground: #e2e8f0;
+
+  /* --background: #ffffff;
+  --foreground: #171717; */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ── Reset ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #040815;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(251, 191, 36, 0.3);
+  border-radius: 9999px;
+}
+
+/* ── Animations ── */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes shimmer-line {
+  0% {
+    stroke-dashoffset: 200;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scan-line {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.6);
+  }
+}
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* ── Utility classes ── */
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease both;
+}
+.animate-gradient {
+  animation: gradient-shift 6s ease infinite;
+  background-size: 200% 200%;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.glass-amber {
+  background: rgba(251, 191, 36, 0.07);
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  backdrop-filter: blur(18px);
+}
+.glass-sky {
+  background: rgba(56, 189, 248, 0.07);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  backdrop-filter: blur(18px);
+}
+.glass-violet {
+  background: rgba(168, 85, 247, 0.07);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  backdrop-filter: blur(18px);
+}
+
+.glow-amber {
+  box-shadow: 0 0 32px rgba(251, 191, 36, 0.22);
+}
+.glow-sky {
+  box-shadow: 0 0 32px rgba(56, 189, 248, 0.22);
+}
+.glow-violet {
+  box-shadow: 0 0 32px rgba(168, 85, 247, 0.22);
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b, #fcd34d);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.text-gradient-spectrum {
+  background: linear-gradient(90deg, #fde68a, #7dd3fc, #c4b5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.star {
+  position: absolute;
+  border-radius: 9999px;
+  background: white;
+  animation: twinkle var(--dur, 3s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Progress bar gradient */
+.progress-gradient {
+  background: linear-gradient(90deg, rgb(var(--gold)) 0%, rgb(var(--sky)) 100%);
 }

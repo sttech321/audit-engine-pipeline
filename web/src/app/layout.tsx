@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Audit NFT Minter",
-  description: "Deterministic RIM-OS v2 model weight auditing and PASS97-compliant NFT minting on Solana",
+  title: "Pass97 | A Mathematical Journey Through Space",
+  description: "Pass97 maps binary artifacts into spectral structure and Penrose geometry, presenting the current verification pipeline through a deep-space mathematical narrative.",
 };
 
 export default function RootLayout({

@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from app.config import get_settings
 from app.logging_config import logger
 from app.models.common_schemas import (
+    ArtifactBlock,
     FileInfo,
     VerificationStatus,
     KPI,
     ExtendedAuditResult,
+    MapPosition,
     RiskBadge,
     EUAIActCompliance,
     LegalDisclosures,
@@ -35,6 +37,7 @@ from app.services.file_validation import (
 )
 from app.services.metadata_parser import parse_metadata, validate_metadata
 from app.services.signature_verification import verify_artifact_signature
+from app.services.artifact_chain import add_artifact_block
 
 router = APIRouter()
 settings = get_settings()
@@ -71,10 +74,8 @@ async def upload_audit_file(
     """
     Upload and process an audit artifact file.
     
-    This endpoint accepts any file extension.
-    PASS97-native formats (.lm3z, .rim0, .rim95) receive the full audit
-    pipeline; other extensions receive limited analysis but still
-    produce a structured report.
+    This endpoint accepts PASS97-native artifact extensions:
+    .lm3z, .rim0, .rim95, and .safetensors.
     
     New additive features (all backward compatible):
     - File extension validation
@@ -86,15 +87,13 @@ async def upload_audit_file(
     """
     try:
         # ─── Stage 0a: Extension Awareness (Additive) ────────────────────────
-        # We no longer reject purely on file extension. Instead, we track
-        # whether the artifact is in a PASS97-native format so that the
-        # response can distinguish "full audit" vs "limited analysis".
         ext = get_file_extension(file.filename or "")
         is_supported_format = ext in SUPPORTED_EXTENSIONS
         if settings.validate_file_extension:
-            # Kept for backward compatibility with callers that expect this
-            # hook to run, but it will not reject on extension anymore.
-            validate_file_extension(file.filename or "")
+            ext_valid, ext_error = validate_file_extension(file.filename or "")
+            if not ext_valid and ext_error:
+                logger.warning(f"Rejected invalid file extension: {file.filename}")
+                raise_structured_error(ext_error, status_code=422)
         
         # ─── Stage 0b: MIME Type Validation (Additive) ───────────────────────
         if settings.validate_mime_type:
@@ -354,6 +353,13 @@ async def upload_audit_file(
         # Preserve legacy behavior: fileHash is pure SHA-256 of raw contents.
         file_hash = compute_file_hash(contents)
 
+        artifact_block = None
+        try:
+            artifact_block = add_artifact_block(report, file_hash)
+            report["artifact_block"] = artifact_block
+        except Exception as chain_error:
+            logger.warning(f"Artifact chain append failed for {file.filename}: {chain_error}")
+
         # Build a minimal ExtendedAuditResult for report caching.
         failed_checks = 0 if risk_level == "LOW" else 1 if risk_level == "MEDIUM" else 3
         risk_badge = RiskBadge.from_audit_score(audit_score, failed_checks)
@@ -386,6 +392,13 @@ async def upload_audit_file(
             legal_disclosures=legal_disclosures,
             ledger=ledger_info,
             penrose_details=penrose_details,
+            map_position=MapPosition(**(report.get("map_position") or {
+                "tau_vectors": [],
+                "barycentric": [],
+                "manifold_hash": "",
+                "tile_hash": "",
+            })),
+            artifact_block=ArtifactBlock(**artifact_block) if artifact_block else None,
             tile_hash=penrose_details["tile_hash"],
         )
 
@@ -416,7 +429,7 @@ async def upload_audit_file(
             verification_mode = "Limited Analysis"
             verification_mode_key = "limited"
             verification_mode_reason = (
-                "File type not in PASS97-native formats (.lm3z, .rim0, .rim95); "
+                "File type not in PASS97-native formats (.lm3z, .rim0, .rim95, .safetensors); "
                 "RIM-OS metrics computed, but format-specific semantics may be unavailable."
             )
 
@@ -453,7 +466,8 @@ async def upload_audit_file(
             verification=mock_verification,
             fileHash=file_hash,
             uploadId=upload_id,
-            metadata=response_metadata
+            metadata=response_metadata,
+            artifactBlock=ArtifactBlock(**artifact_block) if artifact_block else None,
         )
     except HTTPException:
         raise  # Re-raise HTTPException as-is

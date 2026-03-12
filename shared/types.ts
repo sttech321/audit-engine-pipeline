@@ -41,6 +41,7 @@ export interface UploadResponse {
   fileHash: string;
   uploadId: string;
   metadata: UploadMetadata;
+  artifactBlock?: ArtifactBlock | null;
 }
 
 export interface MintPrepareResponse {
@@ -80,6 +81,27 @@ export interface LegalDisclosures {
   version: string;
 }
 
+export interface MapPosition {
+  tau_vectors: number[];
+  barycentric: number[];
+  manifold_hash: string;
+  tile_hash: string;
+}
+
+export interface ArtifactBlock {
+  index: number;
+  timestamp: string;
+  artifact_hash: string;
+  tau_vectors: number[];
+  manifold_hash: string;
+  tile_hash: string;
+  barycentric: number[];
+  prev_block_hash?: string | null;
+  block_hash: string;
+  type?: string | null;
+  anchors?: string[] | null;
+}
+
 export interface Anomaly {
   anomaly_type: string;
   stage: string;
@@ -98,5 +120,7 @@ export interface ExtendedAuditResult {
   ledger?: LedgerInfo | null;
   legal_disclosures: LegalDisclosures;
   penrose_details?: Record<string, unknown> | null;
+  map_position?: MapPosition | null;
+  artifact_block?: ArtifactBlock | null;
   tile_hash?: string | null;
 }

@@ -172,6 +172,29 @@ class LedgerInfo(BaseModel):
     entry_hash: str
 
 
+class MapPosition(BaseModel):
+    """Artifact coordinates on the Penrose map."""
+    tau_vectors: List[float]
+    barycentric: List[float]
+    manifold_hash: str
+    tile_hash: str
+
+
+class ArtifactBlock(BaseModel):
+    """Artifact blockchain block representing one resolved map position."""
+    index: int
+    timestamp: str
+    artifact_hash: str
+    tau_vectors: List[float]
+    manifold_hash: str
+    tile_hash: str
+    barycentric: List[float]
+    prev_block_hash: Optional[str] = None
+    block_hash: str
+    type: Optional[str] = None
+    anchors: Optional[List[str]] = None
+
+
 class LegalDisclosures(BaseModel):
     """
     Legal scope disclosures per PASS97 spec.
@@ -233,7 +256,12 @@ class ExtendedAuditResult(BaseModel):
     
     # Penrose P3 details
     penrose_details: Optional[Dict[str, Any]] = None
+
+    # Artifact map coordinates
+    map_position: Optional[MapPosition] = None
+
+    # Additive local artifact-position chain entry
+    artifact_block: Optional[ArtifactBlock] = None
     
     # Tile hash for NFT
     tile_hash: Optional[str] = None
-

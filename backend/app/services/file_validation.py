@@ -3,15 +3,13 @@ File validation service with secure file handling.
 
 This is an ADDITIVE service that provides:
 - Streaming file upload with SpooledTemporaryFile
-- Optional extension awareness for PASS97-supported formats
+- Extension validation for PASS97-supported formats
 - MIME type validation
 - Size validation (preserves existing error behavior)
 
 NOTE:
-- The upload API must now accept *any* file extension.
-- PASS97-specific formats (.lm3z, .rim0, .rim95) are treated as
-  "full audit" inputs, while all other extensions are allowed but
-  may only receive limited analysis at the reporting layer.
+- PASS97 upload endpoints enforce supported extensions:
+  .lm3z, .rim0, .rim95, .safetensors.
 """
 import hashlib
 import io
@@ -27,10 +25,8 @@ from app.models.error_schemas import ErrorCode, StructuredError
 
 # ─── File Types ───────────────────────────────────────────────────────────────
 
-# Extensions that are wired for full PASS97 audit semantics (metadata parsing,
-# signature verification, etc.). Other extensions are still accepted but
-# reported as "limited analysis" by the upload pipeline.
-SUPPORTED_EXTENSIONS = {".lm3z", ".rim0", ".rim95"}
+# Extensions supported by PASS97 upload endpoints.
+SUPPORTED_EXTENSIONS = {".lm3z", ".rim0", ".rim95", ".safetensors"}
 
 # MIME types that may be reported for binary audit artifacts
 ALLOWED_MIME_TYPES = {
@@ -40,6 +36,7 @@ ALLOWED_MIME_TYPES = {
     "application/x-lm3z",
     "application/x-rim0",
     "application/x-rim95",
+    "application/x-safetensors",
     # Some systems report these for binary files
     "application/unknown",
     None,  # Allow when MIME type is not detected
@@ -82,13 +79,7 @@ def get_file_extension(filename: str) -> str:
 
 def validate_file_extension(filename: str) -> Tuple[bool, Optional[StructuredError]]:
     """
-    Extension awareness helper.
-
-    Historically this enforced a strict whitelist of PASS97 formats.
-    The platform now accepts ANY extension, so this function never
-    rejects purely on file type. Callers can still use
-    SUPPORTED_EXTENSIONS to distinguish full-audit formats from
-    "limited analysis" formats.
+    Validate file extension against the PASS97-supported set.
     
     Args:
         filename: Original filename
@@ -96,10 +87,13 @@ def validate_file_extension(filename: str) -> Tuple[bool, Optional[StructuredErr
     Returns:
         Tuple of (is_valid, error if invalid)
     """
-    _ = get_file_extension(filename)
-    # All extensions are now accepted. Backward-compatible callers
-    # still receive (True, None) and should NOT treat extension
-    # alone as a reason to reject uploads.
+    ext = get_file_extension(filename)
+    if ext not in SUPPORTED_EXTENSIONS:
+        return False, StructuredError(
+            code=ErrorCode.FILE_INVALID_EXTENSION,
+            message="Invalid file extension. Supported formats: .lm3z, .rim0, .rim95, .safetensors.",
+            details={"extension": ext or "(none)"},
+        )
     return True, None
 
 

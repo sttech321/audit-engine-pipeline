@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.models.common_schemas import FileInfo, KPI, VerificationStatus
+from app.models.common_schemas import ArtifactBlock, FileInfo, KPI, VerificationStatus
 
 
 class UploadResponse(BaseModel):
@@ -12,3 +12,4 @@ class UploadResponse(BaseModel):
     fileHash: str
     uploadId: str
     metadata: dict[str, Any]
+    artifactBlock: ArtifactBlock | None = None

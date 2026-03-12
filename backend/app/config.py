@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     chunk_upload_max_concurrent: int = 8  # Max parallel chunk requests
     chunk_upload_session_ttl_seconds: int = 3600  # 1 hour
     chunk_upload_temp_dir: str = ""  # Empty = system temp
+    worker_timeout_seconds: int = 3600  # Default timeout for CPU-bound worker tasks
+    artifact_chain_path: str = "data/artifact_chain.json"  # Local artifact-position chain
     
     # Audit Pipeline Constants
     prime_p: int = 2**127 - 1  # Mersenne prime for p-adic arithmetic
@@ -59,7 +61,7 @@ class Settings(BaseSettings):
     # All new features are opt-out configurable
     
     # File validation features
-    validate_file_extension: bool = True  # Enforce .lm3z, .rim0, .rim95 extensions
+    validate_file_extension: bool = True  # Enforce .lm3z, .rim0, .rim95, .safetensors extensions
     validate_mime_type: bool = True  # Validate MIME types
     use_streaming_upload: bool = True  # Use memory-efficient streaming
     

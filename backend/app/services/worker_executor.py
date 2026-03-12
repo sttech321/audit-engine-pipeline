@@ -3,7 +3,7 @@ Worker executor service with ProcessPoolExecutor for CPU-bound audit tasks.
 
 PASS97 Spec Compliant:
 - Worker processes (not threads) for isolation
-- 30-second per-chunk timeout
+- Configurable worker timeout
 - Memory isolation between audits
 - Graceful timeout handling
 
@@ -11,11 +11,14 @@ This provides process isolation for security-critical audit operations.
 """
 import asyncio
 import hashlib
-from concurrent.futures import ProcessPoolExecutor, TimeoutError as FuturesTimeoutError
-from typing import Callable, Any, Optional, Tuple, List
+from concurrent.futures import ProcessPoolExecutor
+from typing import Callable, Any, Optional, List
 from functools import partial
 
+from app.config import get_settings
 from app.logging_config import logger
+
+settings = get_settings()
 
 
 # ─── Worker Pool Configuration ───────────────────────────────────────────────
@@ -23,8 +26,8 @@ from app.logging_config import logger
 # Maximum worker processes (CPU-bound tasks)
 MAX_WORKERS = 4
 
-# Per-chunk timeout in seconds (PASS97 spec: 30 seconds)
-CHUNK_TIMEOUT_SECONDS = 30
+# Default timeout in seconds for worker-executed tasks.
+CHUNK_TIMEOUT_SECONDS = settings.worker_timeout_seconds
 
 # Global executor (lazily initialized)
 _executor: Optional[ProcessPoolExecutor] = None
@@ -67,13 +70,13 @@ async def execute_in_worker(
     
     PASS97 Spec Compliant:
     - Uses ProcessPoolExecutor (not threads)
-    - 30-second timeout by default
+    - Configurable timeout via settings
     - Raises TimeoutError on timeout
     
     Args:
         func: Function to execute (must be picklable)
         *args: Positional arguments for func
-        timeout: Timeout in seconds (default: 30)
+        timeout: Timeout in seconds
         **kwargs: Keyword arguments for func
         
     Returns:

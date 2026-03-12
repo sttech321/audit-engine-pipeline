@@ -110,3 +110,32 @@ def test_api_upload_uses_rimos_score(sample_valid_content):
     assert kpis[0]["label"] == "Audit Score"
     assert kpis[0]["value"] == expected_score
 
+
+def test_api_extended_report_exposes_map_position(sample_valid_content):
+    """Extended report should expose Penrose map coordinates for the artifact."""
+    resp = client.post("/api/upload", files=make_file("map.rim95", sample_valid_content))
+    assert resp.status_code == 200
+    payload = resp.json()
+    upload_id = payload["uploadId"]
+
+    assert "artifactBlock" in payload
+    artifact_block = payload["artifactBlock"]
+    assert artifact_block["index"] == 1
+    assert len(artifact_block["tau_vectors"]) == 5
+    assert isinstance(artifact_block["block_hash"], str)
+
+    extended = client.get(f"/api/report/{upload_id}/extended")
+    assert extended.status_code == 200
+    data = extended.json()
+
+    assert "map_position" in data
+    assert "artifact_block" in data
+    map_position = data["map_position"]
+    artifact_block = data["artifact_block"]
+    assert len(map_position["tau_vectors"]) == 5
+    assert len(map_position["barycentric"]) == 3
+    assert isinstance(map_position["manifold_hash"], str)
+    assert isinstance(map_position["tile_hash"], str)
+    assert artifact_block["manifold_hash"] == map_position["manifold_hash"]
+    assert artifact_block["tile_hash"] == map_position["tile_hash"]
+

@@ -8,6 +8,7 @@ Features:
 - Merge on completion, then run RIM audit
 """
 import asyncio
+import json
 import os
 import tempfile
 import time
@@ -25,9 +26,25 @@ from app.services.file_validation import (
     validate_file_extension,
 )
 from app.services.rim_wrapper import run_rim_audit
+from app.services.artifact_chain import add_artifact_block
+from app.services.worker_executor import execute_in_worker
 from app.utils.penrose import extract_penrose_from_report
 
 settings = get_settings()
+
+
+class FileProgressCallback:
+    """Picklable progress callback that persists worker progress to disk."""
+
+    def __init__(self, path: str):
+        self.path = path
+
+    def __call__(self, pct: float) -> None:
+        try:
+            Path(self.path).write_text(f"{pct:.4f}", encoding="ascii")
+        except OSError:
+            # Progress reporting is best-effort and must not break the audit.
+            pass
 
 
 @dataclass
@@ -76,6 +93,85 @@ class ChunkedUploadService:
             return self._temp_dir
         return tempfile.gettempdir()
 
+    def _session_meta_path(self, upload_id: str) -> str:
+        return os.path.join(self._get_temp_dir(), f"chunk_upload_{upload_id}.json")
+
+    def _progress_path(self, upload_id: str) -> str:
+        return os.path.join(self._get_temp_dir(), f"chunk_upload_progress_{upload_id}.txt")
+
+    def _persist_session(self, session: UploadSession) -> None:
+        payload = {
+            "upload_id": session.upload_id,
+            "filename": session.filename,
+            "total_size": session.total_size,
+            "total_chunks": session.total_chunks,
+            "chunk_size": session.chunk_size,
+            "temp_path": session.temp_path,
+            "uploaded_chunks": sorted(session.uploaded_chunks),
+            "status": session.status,
+            "error": session.error,
+            "result": session.result,
+            "created_at": session.created_at,
+            "supported_format": session.supported_format,
+        }
+        Path(self._session_meta_path(session.upload_id)).write_text(
+            json.dumps(payload, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
+    def _restore_session_from_disk(self, upload_id: str) -> Optional[UploadSession]:
+        meta_path = self._session_meta_path(upload_id)
+        if not os.path.exists(meta_path):
+            return None
+
+        try:
+            data = json.loads(Path(meta_path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+        temp_path = data.get("temp_path", "")
+        status = data.get("status", "uploading")
+        if status != "completed" and not os.path.exists(temp_path):
+            return None
+
+        total_chunks = int(data["total_chunks"])
+        session = UploadSession(
+            upload_id=data["upload_id"],
+            filename=data["filename"],
+            total_size=int(data["total_size"]),
+            total_chunks=total_chunks,
+            chunk_size=int(data["chunk_size"]),
+            temp_path=temp_path,
+            uploaded_chunks=set(data.get("uploaded_chunks", [])),
+            status=status,
+            error=data.get("error"),
+            result=data.get("result"),
+            created_at=float(data.get("created_at", time.time())),
+            _chunk_locks={i: asyncio.Lock() for i in range(total_chunks)},
+            supported_format=bool(data.get("supported_format", True)),
+        )
+        self._sessions[upload_id] = session
+        return session
+
+    async def _get_session(self, upload_id: str) -> Optional[UploadSession]:
+        async with self._sessions_lock:
+            session = self._sessions.get(upload_id)
+            if session:
+                return session
+            return self._restore_session_from_disk(upload_id)
+
+    def _delete_session_files(self, session: UploadSession) -> None:
+        for path in (
+            session.temp_path,
+            self._session_meta_path(session.upload_id),
+            self._progress_path(session.upload_id),
+        ):
+            try:
+                if path and os.path.exists(path):
+                    os.unlink(path)
+            except OSError:
+                pass
+
     async def create_session(
         self,
         filename: str,
@@ -89,7 +185,9 @@ class ChunkedUploadService:
         # PASS97-native format so that the response can distinguish full
         # audit vs limited analysis.
         if settings.validate_file_extension:
-            validate_file_extension(filename)
+            ext_valid, ext_error = validate_file_extension(filename)
+            if not ext_valid:
+                raise ValueError(ext_error.message if ext_error else "Invalid file extension")
 
         ext = get_file_extension(filename or "")
         supported_format = ext in SUPPORTED_EXTENSIONS
@@ -116,6 +214,7 @@ class ChunkedUploadService:
                 supported_format=supported_format,
             )
             self._sessions[upload_id] = session
+            self._persist_session(session)
 
         # Create file and pre-allocate (sparse on most FS)
         with open(temp_path, "wb") as f:
@@ -135,13 +234,12 @@ class ChunkedUploadService:
         Uses per-chunk lock so multiple chunks can be written concurrently (different offsets).
         Returns (success, error_message).
         """
-        async with self._sessions_lock:
-            session = self._sessions.get(upload_id)
-            if not session:
-                return False, "Upload session not found or expired"
-            chunk_lock = session._chunk_locks.get(chunk_index)
-            if not chunk_lock:
-                return False, f"Invalid chunk index {chunk_index}"
+        session = await self._get_session(upload_id)
+        if not session:
+            return False, "Upload session not found or expired"
+        chunk_lock = session._chunk_locks.get(chunk_index)
+        if not chunk_lock:
+            return False, f"Invalid chunk index {chunk_index}"
 
         async with chunk_lock:
             async with session._lock:
@@ -168,13 +266,13 @@ class ChunkedUploadService:
 
             async with session._lock:
                 session.uploaded_chunks.add(chunk_index)
+                self._persist_session(session)
 
         return True, None
 
     async def get_status(self, upload_id: str) -> Optional[dict]:
         """Get session status."""
-        async with self._sessions_lock:
-            session = self._sessions.get(upload_id)
+        session = await self._get_session(upload_id)
         if not session:
             return None
         out: dict = {
@@ -189,6 +287,13 @@ class ChunkedUploadService:
             "error": session.error,
         }
         if session.status == "processing":
+            if upload_id not in self._processing_progress:
+                try:
+                    raw = Path(self._progress_path(upload_id)).read_text(encoding="ascii").strip()
+                    if raw:
+                        self._processing_progress[upload_id] = max(0.0, min(100.0, float(raw)))
+                except (OSError, ValueError):
+                    self._processing_progress[upload_id] = 0.0
             out["processing_pct"] = self._processing_progress.get(upload_id, 0.0)
         if session.status == "completed" and session.result:
             out["result"] = session.result
@@ -212,10 +317,9 @@ class ChunkedUploadService:
         When all chunks received, validate, run RIM audit, return result.
         Caller should invoke this after verifying is_complete.
         """
-        async with self._sessions_lock:
-            session = self._sessions.get(upload_id)
-            if not session:
-                raise ValueError("Upload session not found or expired")
+        session = await self._get_session(upload_id)
+        if not session:
+            raise ValueError("Upload session not found or expired")
 
         async with session._lock:
             if not session.is_complete():
@@ -225,10 +329,12 @@ class ChunkedUploadService:
                 return session.result
 
             session.status = "merging"
+            self._persist_session(session)
             # Merge is implicit - we wrote directly to offsets
 
         try:
             session.status = "processing"
+            self._persist_session(session)
             # Size validation
             actual_size = os.path.getsize(session.temp_path)
             if actual_size != session.total_size:
@@ -238,22 +344,58 @@ class ChunkedUploadService:
             if actual_size < 32:
                 raise ValueError("File too small for audit artifact")
 
-            # Track RIM-OS progress for status polling (callback runs in worker thread)
+            # Execute the CPU-bound audit in the process worker pool rather
+            # than a thread so chunked uploads inherit the intended isolation
+            # and timeout behavior. Progress is mirrored through a temp file
+            # so the polling endpoint can still expose live status updates.
+            progress_path = self._progress_path(upload_id)
             self._processing_progress[upload_id] = 0.0
+            Path(progress_path).write_text("0.0", encoding="ascii")
 
-            def _progress_cb(pct: float) -> None:
-                self._processing_progress[upload_id] = pct
+            stop_progress_monitor = asyncio.Event()
 
-            # Run RIM audit (streams from disk, low memory) in thread pool to avoid blocking
-            report = await asyncio.to_thread(
-                run_rim_audit,
-                session.temp_path,
-                None,  # prev_state
-                _progress_cb,
-            )
+            async def _monitor_progress() -> None:
+                while not stop_progress_monitor.is_set():
+                    try:
+                        raw = Path(progress_path).read_text(encoding="ascii").strip()
+                        if raw:
+                            pct = max(0.0, min(100.0, float(raw)))
+                            self._processing_progress[upload_id] = pct
+                    except (OSError, ValueError):
+                        pass
+                    await asyncio.sleep(0.5)
+
+            progress_task = asyncio.create_task(_monitor_progress())
+
+            try:
+                report = await execute_in_worker(
+                    run_rim_audit,
+                    session.temp_path,
+                    None,
+                    FileProgressCallback(progress_path),
+                )
+            finally:
+                stop_progress_monitor.set()
+                await progress_task
+                try:
+                    os.unlink(progress_path)
+                except OSError:
+                    pass
+
+            self._processing_progress[upload_id] = 100.0
 
             # Compute hash (streaming) in thread to avoid blocking
             file_hash = await asyncio.to_thread(compute_file_hash_from_path, session.temp_path)
+            artifact_block = None
+            try:
+                artifact_block = add_artifact_block(report, file_hash)
+                report["artifact_block"] = artifact_block
+            except Exception as chain_error:
+                logger.warning(
+                    "Artifact chain append failed for %s: %s",
+                    session.filename,
+                    chain_error,
+                )
 
             # Build response in same shape as single-file upload
             summary = report.get("summary", {}) or {}
@@ -272,12 +414,14 @@ class ChunkedUploadService:
                 return base
 
             from app.models.common_schemas import (
+                ArtifactBlock,
                 KPI,
                 VerificationStatus,
                 RiskBadge,
                 EUAIActCompliance,
                 LegalDisclosures,
                 LedgerInfo,
+                MapPosition,
             )
             from app.routers.report import cache_audit_result
             from app.models.common_schemas import ExtendedAuditResult
@@ -299,7 +443,7 @@ class ChunkedUploadService:
                 verification_mode = "Limited Analysis"
                 verification_mode_key = "limited"
                 verification_mode_reason = (
-                    "File type not in PASS97-native formats (.lm3z, .rim0, .rim95); "
+                    "File type not in PASS97-native formats (.lm3z, .rim0, .rim95, .safetensors); "
                     "RIM-OS metrics computed, but format-specific semantics may be unavailable."
                 )
 
@@ -350,6 +494,13 @@ class ChunkedUploadService:
                 legal_disclosures=LegalDisclosures.default(),
                 ledger=ledger_info,
                 penrose_details=penrose_details,
+                map_position=MapPosition(**(report.get("map_position") or {
+                    "tau_vectors": [],
+                    "barycentric": [],
+                    "manifold_hash": "",
+                    "tile_hash": "",
+                })),
+                artifact_block=ArtifactBlock(**artifact_block) if artifact_block else None,
                 tile_hash=penrose_details["tile_hash"],
             )
             cache_audit_result(upload_id, extended)
@@ -360,6 +511,7 @@ class ChunkedUploadService:
                 "kpis": [k.model_dump() for k in mock_kpis],
                 "verification": mock_verification.model_dump(),
                 "file_hash": file_hash,
+                "artifact_block": artifact_block,
                 "metadata": {
                     "name": f"Audit Report: {session.filename}",
                     "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
@@ -379,11 +531,12 @@ class ChunkedUploadService:
             async with session._lock:
                 session.status = "completed"
                 session.result = response_data
+                self._persist_session(session)
             self._processing_progress.pop(upload_id, None)
 
-            # Cleanup temp file
             try:
-                os.unlink(session.temp_path)
+                if os.path.exists(session.temp_path):
+                    os.unlink(session.temp_path)
             except OSError:
                 pass
 
@@ -395,10 +548,8 @@ class ChunkedUploadService:
             async with session._lock:
                 session.status = "failed"
                 session.error = str(e)
-            try:
-                os.unlink(session.temp_path)
-            except OSError:
-                pass
+                self._persist_session(session)
+            self._delete_session_files(session)
             raise
 
     async def cleanup_expired(self):
@@ -412,11 +563,8 @@ class ChunkedUploadService:
             ]
             for uid in to_remove:
                 s = self._sessions.pop(uid, None)
-                if s and os.path.exists(s.temp_path):
-                    try:
-                        os.unlink(s.temp_path)
-                    except OSError:
-                        pass
+                if s:
+                    self._delete_session_files(s)
 
 
 chunked_upload_service = ChunkedUploadService()

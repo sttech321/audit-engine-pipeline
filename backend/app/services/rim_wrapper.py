@@ -77,6 +77,8 @@ def run_rim_audit(
         )
 
     frame_hash = report.get("genesis_frame_hash")
+    if not frame_hash:
+        frame_hash = (report.get("genesis", {}) or {}).get("frame_hash")
     if frame_hash != GENESIS_FRAME_HASH:
         # Hard failure: mixing Genesis frames would break the ledger.
         raise RuntimeError("Genesis frame mismatch")

@@ -218,6 +218,20 @@ async def get_extended_result(upload_id: str):
     return cached
 
 
+@router.get("/report/{upload_id}")
+async def get_report_result(upload_id: str):
+    """
+    Get the cached audit result JSON including map_position coordinates.
+    """
+    cached = get_cached_audit(upload_id)
+    if not cached:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Audit result not found for upload ID: {upload_id}"
+        )
+    return cached
+
+
 @router.get("/ledger")
 async def get_ledger_chain(
     start: int = Query(0, ge=0, description="Start sequence number"),

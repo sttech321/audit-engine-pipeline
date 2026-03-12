@@ -217,7 +217,14 @@ def kag_grid(mag64: List[int]) -> Dict[str, Any]:
 def _pentagrid_tau(kag_hash: str) -> List[float]:
     """kag_hash → five pentagrid offsets τ[0..4] ∈ [0,1)."""
     bs = bytes.fromhex(kag_hash)
-    if len(bs) < 40: bs = (bs * 10)[:40]
+    if len(bs) < 40:
+        seed = bs
+        material = bytearray(bs)
+        counter = 0
+        while len(material) < 40:
+            material.extend(hashlib.sha256(seed + counter.to_bytes(1, "little")).digest())
+            counter += 1
+        bs = bytes(material[:40])
     return [(int.from_bytes(bs[i*8:(i+1)*8], "little") % (1 << 53)) / float(1 << 53)
             for i in range(5)]
 
@@ -816,6 +823,15 @@ def build_ledger(chunks: List[Dict],
         prev_state = sha256_hex(("RIM_OS_GENESIS:" + events_hash).encode())
 
     next_state = sha256_hex((prev_state + ":" + events_hash).encode())
+    map_position = None
+    if chunks:
+        first = chunks[0]
+        map_position = {
+            "artifact_hash": first.get("manifold_hash", ""),
+            "tile_hash": first.get("tile_hash", ""),
+            "tau": first.get("tau_pentagrid", []),
+            "prev_state": prev_state,
+        }
 
     return {
         "events_hash":    events_hash,
@@ -823,6 +839,7 @@ def build_ledger(chunks: List[Dict],
         "th_aggregate":   th_agg,
         "prev_state":     prev_state,
         "next_state_hash": next_state,
+        "map_position":   map_position,
     }
 
 
@@ -945,6 +962,14 @@ def audit_file(path: str,
 
     ledger = build_ledger(chunks, prev_state)
 
+    first_chunk = chunks[0] if chunks else {}
+    map_position = {
+        "tau_vectors": first_chunk.get("tau_pentagrid", []),
+        "barycentric": first_chunk.get("barycentric", []),
+        "manifold_hash": first_chunk.get("manifold_hash", ""),
+        "tile_hash": first_chunk.get("tile_hash", ""),
+    }
+
     report: Dict[str, Any] = {
         "schema":  SCHEMA,
         "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -971,6 +996,7 @@ def audit_file(path: str,
         "anomalies": anomalies,
         "chunks":    chunks,
         "ledger":    ledger,
+        "map_position": map_position,
         "genesis_frame_hash": genesis.get("frame_hash", ""),
         "EU_AI_ACT": _eu_ai_act_block(rl, score, req_rev, conform,
                                        bias, anomalies, ledger, len(chunks)),

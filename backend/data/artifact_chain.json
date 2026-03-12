@@ -1,0 +1,118 @@
+[
+  {
+    "index": 0,
+    "type": "GENESIS",
+    "timestamp": "2026-01-01T00:00:00Z",
+    "anchors": [
+      "fine_structure_constant",
+      "einstein_field_equations",
+      "boltzmann_entropy"
+    ],
+    "block_hash": "aeacdc396c8c9405d09a300fd6e4d86dffeae5acd6da37dec5f0557ca7f7b8d3"
+  },
+  {
+    "index": 1,
+    "timestamp": "2026-03-12T17:22:08Z",
+    "artifact_hash": "04a6bd8e01eda70d0149497135571d80801f72e952e90dbae1220fe89f972efe",
+    "tau_vectors": [
+      0.6947276385793251,
+      0.9180794518773999,
+      0.36172949543841715,
+      0.849222027317887,
+      0.7509869812657821
+    ],
+    "manifold_hash": "a0748688b0080ff2bcfbaf8e25b48c71254e5ca39066a60b800bdd2617906f01",
+    "tile_hash": "bdb97d9a66174e9711711633a74868ccea1350295a49ef19f415c4fc730b8059",
+    "barycentric": [
+      0.25556149358839997,
+      0.4496385342155725,
+      0.2947999721960275
+    ],
+    "prev_block_hash": "aeacdc396c8c9405d09a300fd6e4d86dffeae5acd6da37dec5f0557ca7f7b8d3",
+    "block_hash": "6f72597017fab63c332a40f7bd86a1ad2d4c84f8afded8d56e8c16fed6140c5e"
+  },
+  {
+    "index": 2,
+    "timestamp": "2026-03-12T17:37:15Z",
+    "artifact_hash": "04a6bd8e01eda70d0149497135571d80801f72e952e90dbae1220fe89f972efe",
+    "tau_vectors": [
+      0.6947276385793251,
+      0.9180794518773999,
+      0.36172949543841715,
+      0.849222027317887,
+      0.7509869812657821
+    ],
+    "manifold_hash": "a0748688b0080ff2bcfbaf8e25b48c71254e5ca39066a60b800bdd2617906f01",
+    "tile_hash": "bdb97d9a66174e9711711633a74868ccea1350295a49ef19f415c4fc730b8059",
+    "barycentric": [
+      0.25556149358839997,
+      0.4496385342155725,
+      0.2947999721960275
+    ],
+    "prev_block_hash": "6f72597017fab63c332a40f7bd86a1ad2d4c84f8afded8d56e8c16fed6140c5e",
+    "block_hash": "c22dffc836de56feec2dab7d87743e737b34fab2fc30bb1bc01bc300377df368"
+  },
+  {
+    "index": 3,
+    "timestamp": "2026-03-12T17:40:27Z",
+    "artifact_hash": "82bdeb44f98e6e13a0c5b4522c650ebec8e40697a8a4dfd51cbe429971cc522b",
+    "tau_vectors": [
+      0.18233057319875856,
+      0.8522462327084909,
+      0.7804137462523555,
+      0.15587503801451108,
+      0.7533903381605002
+    ],
+    "manifold_hash": "051f089c9c459cef79b00fc5b453beba4fc3e204bbc4faf697d09c4d39bd8985",
+    "tile_hash": "034cdfe634f27a3e611ed090ee25df162ab6dda6d55bab90a59189e2fb47dd49",
+    "barycentric": [
+      0.2923878853845839,
+      0.3482590269916361,
+      0.35935308762378004
+    ],
+    "prev_block_hash": "c22dffc836de56feec2dab7d87743e737b34fab2fc30bb1bc01bc300377df368",
+    "block_hash": "773b3842ba5ab057413dce9093af69e9fb5229ce3d797f77554eef8b3cb4e1d6"
+  },
+  {
+    "index": 4,
+    "timestamp": "2026-03-12T18:12:38Z",
+    "artifact_hash": "04a6bd8e01eda70d0149497135571d80801f72e952e90dbae1220fe89f972efe",
+    "tau_vectors": [
+      0.6947276385793251,
+      0.9180794518773999,
+      0.36172949543841715,
+      0.849222027317887,
+      0.7509869812657821
+    ],
+    "manifold_hash": "a0748688b0080ff2bcfbaf8e25b48c71254e5ca39066a60b800bdd2617906f01",
+    "tile_hash": "bdb97d9a66174e9711711633a74868ccea1350295a49ef19f415c4fc730b8059",
+    "barycentric": [
+      0.25556149358839997,
+      0.4496385342155725,
+      0.2947999721960275
+    ],
+    "prev_block_hash": "773b3842ba5ab057413dce9093af69e9fb5229ce3d797f77554eef8b3cb4e1d6",
+    "block_hash": "7f71ebd852ab4864fe671c8722763e8d3cd699b94a38a50aaabecf80c7b09ca7"
+  },
+  {
+    "index": 5,
+    "timestamp": "2026-03-12T18:18:11Z",
+    "artifact_hash": "82bdeb44f98e6e13a0c5b4522c650ebec8e40697a8a4dfd51cbe429971cc522b",
+    "tau_vectors": [
+      0.18233057319875856,
+      0.8522462327084909,
+      0.7804137462523555,
+      0.15587503801451108,
+      0.7533903381605002
+    ],
+    "manifold_hash": "051f089c9c459cef79b00fc5b453beba4fc3e204bbc4faf697d09c4d39bd8985",
+    "tile_hash": "034cdfe634f27a3e611ed090ee25df162ab6dda6d55bab90a59189e2fb47dd49",
+    "barycentric": [
+      0.2923878853845839,
+      0.3482590269916361,
+      0.35935308762378004
+    ],
+    "prev_block_hash": "7f71ebd852ab4864fe671c8722763e8d3cd699b94a38a50aaabecf80c7b09ca7",
+    "block_hash": "6776499d2d3a13a530e8c282e8ae7956adbec3fac8d5a620789a4cdc1ba199d4"
+  }
+]
