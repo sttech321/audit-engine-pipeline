@@ -443,7 +443,8 @@ class ChunkedUploadService:
                 verification_mode = "Limited Analysis"
                 verification_mode_key = "limited"
                 verification_mode_reason = (
-                    "File type not in PASS97-native formats (.lm3z, .rim0, .rim95, .safetensors); "
+                    "File type not in PASS97-native formats (.lm3z, .rim0, .rim95, .safetensors, "
+                    ".bin, .gguf, .pt, .pth, .ckpt, .onnx); "
                     "RIM-OS metrics computed, but format-specific semantics may be unavailable."
                 )
 

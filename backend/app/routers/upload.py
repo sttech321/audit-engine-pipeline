@@ -75,7 +75,7 @@ async def upload_audit_file(
     Upload and process an audit artifact file.
     
     This endpoint accepts PASS97-native artifact extensions:
-    .lm3z, .rim0, .rim95, and .safetensors.
+    .lm3z, .rim0, .rim95, .safetensors, .bin, .gguf, .pt, .pth, .ckpt, and .onnx.
     
     New additive features (all backward compatible):
     - File extension validation
@@ -429,7 +429,8 @@ async def upload_audit_file(
             verification_mode = "Limited Analysis"
             verification_mode_key = "limited"
             verification_mode_reason = (
-                "File type not in PASS97-native formats (.lm3z, .rim0, .rim95, .safetensors); "
+                "File type not in PASS97-native formats (.lm3z, .rim0, .rim95, .safetensors, "
+                ".bin, .gguf, .pt, .pth, .ckpt, .onnx); "
                 "RIM-OS metrics computed, but format-specific semantics may be unavailable."
             )
 

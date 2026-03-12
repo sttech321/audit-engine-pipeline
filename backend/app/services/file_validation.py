@@ -9,7 +9,7 @@ This is an ADDITIVE service that provides:
 
 NOTE:
 - PASS97 upload endpoints enforce supported extensions:
-  .lm3z, .rim0, .rim95, .safetensors.
+  .lm3z, .rim0, .rim95, .safetensors, .bin, .gguf, .pt, .pth, .ckpt, .onnx.
 """
 import hashlib
 import io
@@ -26,7 +26,18 @@ from app.models.error_schemas import ErrorCode, StructuredError
 # ─── File Types ───────────────────────────────────────────────────────────────
 
 # Extensions supported by PASS97 upload endpoints.
-SUPPORTED_EXTENSIONS = {".lm3z", ".rim0", ".rim95", ".safetensors"}
+SUPPORTED_EXTENSIONS = {
+    ".lm3z",
+    ".rim0",
+    ".rim95",
+    ".safetensors",
+    ".bin",
+    ".gguf",
+    ".pt",
+    ".pth",
+    ".ckpt",
+    ".onnx",
+}
 
 # MIME types that may be reported for binary audit artifacts
 ALLOWED_MIME_TYPES = {
@@ -37,6 +48,14 @@ ALLOWED_MIME_TYPES = {
     "application/x-rim0",
     "application/x-rim95",
     "application/x-safetensors",
+    "application/x-gguf",
+    "application/gguf",
+    "application/x-pt",
+    "application/x-pytorch",
+    "application/x-pth",
+    "application/x-ckpt",
+    "application/x-onnx",
+    "application/onnx",
     # Some systems report these for binary files
     "application/unknown",
     None,  # Allow when MIME type is not detected
@@ -91,7 +110,10 @@ def validate_file_extension(filename: str) -> Tuple[bool, Optional[StructuredErr
     if ext not in SUPPORTED_EXTENSIONS:
         return False, StructuredError(
             code=ErrorCode.FILE_INVALID_EXTENSION,
-            message="Invalid file extension. Supported formats: .lm3z, .rim0, .rim95, .safetensors.",
+            message=(
+                "Invalid file extension. Supported formats: .lm3z, .rim0, .rim95, "
+                ".safetensors, .bin, .gguf, .pt, .pth, .ckpt, .onnx."
+            ),
             details={"extension": ext or "(none)"},
         )
     return True, None

@@ -37,6 +37,23 @@ def test_valid_safetensors_extension(sample_valid_content):
     assert r.status_code == 200
 
 
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "test.bin",
+        "test.gguf",
+        "test.pt",
+        "test.pth",
+        "test.ckpt",
+        "test.onnx",
+    ],
+)
+def test_valid_additional_model_extensions(sample_valid_content, filename):
+    """Additional binary model extensions should be accepted."""
+    r = client.post("/api/upload", files=make_file(filename, sample_valid_content))
+    assert r.status_code == 200
+
+
 def test_invalid_extension_txt(sample_valid_content):
     """Files with .txt extension should be rejected."""
     r = client.post("/api/upload", files=make_file("test.txt", sample_valid_content))
@@ -80,6 +97,10 @@ def test_case_insensitive_extension(sample_valid_content):
 
     clear_stores()
     r = client.post("/api/upload", files=make_file("test.SafeTensors", sample_valid_content))
+    assert r.status_code == 200
+
+    clear_stores()
+    r = client.post("/api/upload", files=make_file("test.GGUF", sample_valid_content))
     assert r.status_code == 200
 
 

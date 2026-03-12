@@ -297,6 +297,12 @@ export default function Home() {
                 <span className="font-mono text-amber-200">.rim0</span>{" "}
                 <span className="font-mono text-amber-200">.rim95</span>{" "}
                 <span className="font-mono text-amber-200">.safetensors</span>{" "}
+                <span className="font-mono text-amber-200">.bin</span>{" "}
+                <span className="font-mono text-amber-200">.gguf</span>{" "}
+                <span className="font-mono text-amber-200">.pt</span>{" "}
+                <span className="font-mono text-amber-200">.pth</span>{" "}
+                <span className="font-mono text-amber-200">.ckpt</span>{" "}
+                <span className="font-mono text-amber-200">.onnx</span>{" "}
                 receive the deepest verification path
               </div>
             </div>
@@ -487,6 +493,12 @@ export default function Home() {
                 <span className="font-mono text-amber-200">.rim0</span>{" "}
                 <span className="font-mono text-amber-200">.rim95</span>{" "}
                 <span className="font-mono text-amber-200">.safetensors</span>{" "}
+                <span className="font-mono text-amber-200">.bin</span>{" "}
+                <span className="font-mono text-amber-200">.gguf</span>{" "}
+                <span className="font-mono text-amber-200">.pt</span>{" "}
+                <span className="font-mono text-amber-200">.pth</span>{" "}
+                <span className="font-mono text-amber-200">.ckpt</span>{" "}
+                <span className="font-mono text-amber-200">.onnx</span>{" "}
                 use the full verification route with PASS97 deep audit.
               </p>
             </div>

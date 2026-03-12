@@ -381,7 +381,13 @@ export default function UploadPage() {
                       <span className="font-mono text-amber-200">.lm3z</span>{" "}
                       <span className="font-mono text-amber-200">.rim0</span>{" "}
                       <span className="font-mono text-amber-200">.rim95</span>{" "}
-                      <span className="font-mono text-amber-200">.safetensors</span>.
+                      <span className="font-mono text-amber-200">.safetensors</span>{" "}
+                      <span className="font-mono text-amber-200">.bin</span>{" "}
+                      <span className="font-mono text-amber-200">.gguf</span>{" "}
+                      <span className="font-mono text-amber-200">.pt</span>{" "}
+                      <span className="font-mono text-amber-200">.pth</span>{" "}
+                      <span className="font-mono text-amber-200">.ckpt</span>{" "}
+                      <span className="font-mono text-amber-200">.onnx</span>.
                     </li>
                     <li>Other types receive structural analysis.</li>
                     <li>
