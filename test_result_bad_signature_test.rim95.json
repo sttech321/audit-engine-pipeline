@@ -49,7 +49,7 @@
   "verification": {
     "status": "Verification Failed",
     "confidence": 33,
-    "timestamp": "2026-03-12T19:10:52Z",
+    "timestamp": "2026-03-13T11:43:01Z",
     "checks": [
       "Stage 1 - Schema & Genesis: OK",
       "Stage 2 - Entropy: avg_entropy_bits=1.5850",
@@ -59,7 +59,7 @@
     ]
   },
   "fileHash": "9a049b03f6fc40bfcf2f136320359257ed4af8513f71aa6fef47f17059bbae23",
-  "uploadId": "1274654d-8e33-4b49-95f2-999a482527ca",
+  "uploadId": "12553b03-d750-420c-a93d-b8c9944b0250",
   "metadata": {
     "name": "Audit Report: bad_signature_test.rim95",
     "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
@@ -76,8 +76,8 @@
     "verification_mode": "full"
   },
   "artifactBlock": {
-    "index": 51,
-    "timestamp": "2026-03-12T19:10:52Z",
+    "index": 35,
+    "timestamp": "2026-03-13T11:43:01Z",
     "artifact_hash": "9a049b03f6fc40bfcf2f136320359257ed4af8513f71aa6fef47f17059bbae23",
     "tau_vectors": [
       0.5222739749265605,
@@ -93,8 +93,8 @@
       0.38524052324645464,
       0.3477638429382231
     ],
-    "prev_block_hash": "336ec495128ee06a4a3b907828c0d9b1a71835327d0f3b96e8dcf21829cfea66",
-    "block_hash": "b2eba72d1582b29ad4f4bff17a9b5730183207e2d51e8316cd1c1ade1549823a",
+    "prev_block_hash": "e450b2cb6414affbaa1657549a28d23a7b17f47564ef6a3e3518ca06628d3821",
+    "block_hash": "e86b6fe7bf0406b2ed6d7c49dea15155301a0cf01a4da0e9a7079f980c990a9c",
     "type": null,
     "anchors": null
   }

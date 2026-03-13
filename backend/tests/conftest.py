@@ -191,6 +191,12 @@ def isolate_artifact_chain_path(monkeypatch, tmp_path):
     monkeypatch.setenv("ARTIFACT_CHAIN_PATH", str(tmp_path / "artifact_chain.json"))
 
 
+@pytest.fixture(autouse=True)
+def isolate_report_cache_dir(monkeypatch, tmp_path):
+    """Give each test an isolated persistent report cache directory."""
+    monkeypatch.setenv("REPORT_CACHE_DIR", str(tmp_path / "report_cache"))
+
+
 @pytest.fixture
 def disable_abuse_protection(monkeypatch):
     """Disable abuse protection for tests that need multiple uploads."""

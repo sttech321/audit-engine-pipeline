@@ -1,0 +1,400 @@
+{
+  "kpis": [
+    {
+      "id": "kpi-1",
+      "label": "Audit Score",
+      "value": 34.0,
+      "trend": "down",
+      "status": "warning",
+      "description": "RIM-OS integrity score (0\u2013100)"
+    },
+    {
+      "id": "kpi-2",
+      "label": "Issues Found",
+      "value": 0,
+      "trend": "down",
+      "status": "warning",
+      "description": "Count of anomalous chunks detected by RIM-OS"
+    },
+    {
+      "id": "kpi-3",
+      "label": "KAG Score",
+      "value": "0.8930",
+      "trend": "up",
+      "status": "warning",
+      "description": "Average KAG separability from RIM-OS"
+    },
+    {
+      "id": "kpi-4",
+      "label": "Coverage",
+      "value": "100.0%",
+      "trend": "up",
+      "status": "warning",
+      "description": "1 \u2212 anomaly_fraction, scaled to percentage"
+    },
+    {
+      "id": "kpi-5",
+      "label": "Penrose Sector",
+      "value": 0,
+      "trend": "stable",
+      "status": "warning",
+      "description": "Penrose details are now handled solely inside RIM-OS"
+    }
+  ],
+  "verification": {
+    "status": "Verification Failed",
+    "confidence": 34,
+    "timestamp": "2026-03-13T10:58:21Z",
+    "checks": [
+      "Stage 1 - Schema & Genesis: OK",
+      "Stage 2 - Entropy: avg_entropy_bits=2.9477",
+      "Stage 3 - Penrose geometry: avg_penrose_match=0.3614",
+      "Stage 4 - Anomalies: anomaly_fraction=0.0000, count=0",
+      "Stage 5 - Risk: risk_level=HIGH"
+    ]
+  },
+  "file_hash": "8370a6cf54caca016a8cc9dc9be68cd20cb69be981e86bbc3f734dd780abff79",
+  "anomalies": [],
+  "risk_badge": {
+    "level": "CRITICAL",
+    "score": 34.0,
+    "label": "Critical Risk",
+    "color": "#ef4444"
+  },
+  "eu_ai_act": {
+    "category": "HIGH_RISK",
+    "article_reference": "Article 6, Annex III",
+    "requirements": [
+      "Risk management system required",
+      "Data governance and documentation",
+      "Human oversight provisions",
+      "Accuracy, robustness, cybersecurity"
+    ],
+    "assessment": "Model weights may require HIGH_RISK compliance if deployed in listed use cases",
+    "disclaimer": "This assessment is informational only. Consult legal counsel for official compliance determination."
+  },
+  "EU_AI_ACT_FULL": {
+    "meta": {
+      "system_name": "RIM-OS Audit Pipeline",
+      "layer_version": "EU-AIAct-Layer-1.0.0",
+      "schema": "RIM-OS-2.0.0",
+      "regulation": "Regulation (EU) 2024/1689 of the European Parliament and of the Council",
+      "audit_timestamp": "2026-03-13T10:58:21Z",
+      "target_file": "tmpx5vq95bn.rim95",
+      "target_size_bytes": 9,
+      "chunk_count": 1,
+      "chunk_size_bytes": 1048576,
+      "genesis_frame_hash": "782b400ae8e8f0bbf8e1d39ce59e3f69f914add95fd7805d2b63be0b0c5402ee"
+    },
+    "Art_9_risk": {
+      "article": "Art. 9 \u2014 Risk Management System",
+      "integrity_score_0_100": 34,
+      "risk_level": "HIGH",
+      "anomaly_count": 0,
+      "anomaly_fraction": 0.0,
+      "bias_penalty_0_1": 0.9349999999999999,
+      "human_review_required": true,
+      "risk_signals": [
+        "BF16 bias penalty 0.935 exceeds threshold 0.25",
+        "Integrity score in HIGH risk band (< 40)"
+      ],
+      "mitigations_applied": [
+        "G\u00f6del encoding: deterministic byte-level fingerprinting",
+        "p-adic lift: metric-space consistency check across exponent vectors",
+        "NTT spectral transform: frequency-domain anomaly detection (GF 998244353)",
+        "KAG 8\u00d78 grid: separability analysis for weight distribution",
+        "Penrose P3 manifold: geometric conformity scoring",
+        "BF16 bias heuristics: detection of weight quantisation anomalies",
+        "Statistical z-score outlier detection across all chunks"
+      ],
+      "residual_risks": [
+        {
+          "risk_id": "R-01",
+          "category": "Model integrity",
+          "description": "Adversarially crafted weights that mimic benign spectral signatures",
+          "likelihood": "MEDIUM",
+          "mitigation": "Penrose match score + multi-layer spectral redundancy"
+        },
+        {
+          "risk_id": "R-02",
+          "category": "Bias / fairness",
+          "description": "BF16 weight distribution skew indicating training-data bias",
+          "likelihood": "HIGH",
+          "mitigation": "BF16 bias heuristic; human review required if penalty > 0.25"
+        },
+        {
+          "risk_id": "R-03",
+          "category": "Backdoor / trojan",
+          "description": "Covert activation patterns in weight tensors",
+          "likelihood": "UNKNOWN",
+          "mitigation": "Anomaly detection flags statistical outliers; dedicated trojan scanning outside scope of this layer"
+        },
+        {
+          "risk_id": "R-04",
+          "category": "Operational failure",
+          "description": "Model behaves correctly in audit but degrades in deployment",
+          "likelihood": "LOW",
+          "mitigation": "Runtime monitoring recommended; this audit covers weights only"
+        }
+      ],
+      "overall_assessment": "Risk management system IMPLEMENTED. Automated controls cover 7 distinct mitigation layers."
+    },
+    "Art_10_data": {
+      "article": "Art. 10 \u2014 Data and Data Governance",
+      "data_source": "Model weight tensors (safetensors / GGUF / raw binary)",
+      "training_data_origin": "UNKNOWN \u2014 third-party model; provenance not auditable at weight level",
+      "tensor_count": 0,
+      "tensor_inventory_sample": [],
+      "weight_distribution": {
+        "avg_entropy_bits": 2.94770277922009,
+        "avg_kag_separability": 0.8930150490476494,
+        "bf16_bias_penalty": 0.9349999999999999,
+        "health_assessment": "DEGRADED \u2014 low entropy or high bias; review recommended"
+      },
+      "anomaly_detection": {
+        "method": "Statistical z-score per chunk; multi-dimensional outlier detection",
+        "result": "0 anomalous chunks detected"
+      },
+      "data_quality_notes": [
+        "Weight entropy is a proxy for training data diversity; low entropy may indicate memorisation.",
+        "BF16 bias penalty detects systematic quantisation artefacts.",
+        "KAG separability measures axis-aligned structure; low separability suggests entangled features.",
+        "Training data identity, collection practices, and consent cannot be verified from weights alone."
+      ]
+    },
+    "Art_11_docs": {
+      "article": "Art. 11 \u2014 Technical Documentation",
+      "pipeline": "G\u00f6del \u2192 p-adic \u2192 NTT \u2192 KAG \u2192 Penrose P3",
+      "reproducible": true,
+      "schema": "RIM-OS-2.0.0",
+      "methods": {
+        "godel_encoding": {
+          "description": "Maps binary data to a prime-exponent vector. Position i \u2192 prime p_i; exponent = byte value at position i. Preserves ordering via block-position weighting.",
+          "deterministic": true
+        },
+        "padic_lift": {
+          "description": "Extends G\u00f6del exponent vectors into the p-adic metric space. Encodes residue classes (mod p^k) to measure arithmetic closeness of weight blocks.",
+          "finite_field": "p-adic (k=3 by default)",
+          "deterministic": true
+        },
+        "ntt_fingerprint": {
+          "description": "Number-theoretic transform over GF(998244353). Produces a 1024-length spectral fingerprint from p-adic residues. Resistant to byte reordering; sensitive to structural changes.",
+          "modulus": 998244353,
+          "length": 1024,
+          "deterministic": true
+        },
+        "kag_grid": {
+          "description": "Kolmogorov-Arnold Geometry: 8\u00d78 additive grid on NTT magnitude vector. Measures separability via row/column mean decomposition. NOT a Jacobian-based KAN; additive approximation only.",
+          "grid_size": "8\u00d78",
+          "deterministic": true
+        },
+        "penrose_p3": {
+          "description": "Maps KAG hash to a deterministic Penrose P3 tiling patch. Penrose match score measures how well the chunk's spectral signature conforms to quasicrystalline structure \u2014 an indicator of weight regularity.",
+          "tiling": "Penrose P3 (kite / dart via pentagrid intersection)",
+          "deterministic": true
+        },
+        "bf16_bias_heuristic": {
+          "description": "Scans raw bytes for systematic BF16 sign/exponent patterns. High penalty \u2192 likely weight quantisation artefact or distribution skew.",
+          "deterministic": true
+        }
+      },
+      "assumptions": [
+        "Input file is a valid ML model weight file (safetensors, GGUF, or raw binary).",
+        "Chunk size is fixed at 1 MB; partial final chunks are processed as-is.",
+        "The Genesis Frame (physical constants c, \u0127, G) is the immutable coordinate origin."
+      ],
+      "known_limitations": [
+        "Does not detect semantic bias in model outputs \u2014 weights only.",
+        "BF16 bias heuristic is probabilistic; false positives possible on highly compressed files.",
+        "Penrose match score is a structural proxy, not a direct measure of model correctness.",
+        "Trojan / backdoor detection is partial; dedicated tools recommended for high-risk deployments."
+      ],
+      "chunk_count_processed": 1,
+      "integrity_hash": "b300fdc331fd068d787bcc1c621ab5b0295805c200c716412b077cb5eab05eca"
+    },
+    "Art_12_logging": {
+      "article": "Art. 12 \u2014 Record-Keeping",
+      "logging_status": "ACTIVE",
+      "log_entry": {
+        "timestamp_utc": "2026-03-13T10:58:21Z",
+        "input_file": "tmpx5vq95bn.rim95",
+        "input_sha256": "b300fdc331fd068d787bcc1c621ab5b0295805c200c716412b077cb5eab05eca",
+        "pipeline_version": "RIM-OS-2.0.0",
+        "layer_version": "EU-AIAct-Layer-1.0.0"
+      },
+      "ledger": {
+        "events_hash": "846db86deab8dc9d4d71b089eacc41ac70712cc9a0ddc1e9a4e2957c62b45970",
+        "next_state_hash": "3a67d804105162c5601d635a73eac6b20e472357dda97a7be761becec4296722",
+        "prev_state_hash": null,
+        "chain_linkable": true,
+        "blockchain_ready": true
+      },
+      "traceability_notes": [
+        "events_hash covers all per-chunk manifold hashes; any weight change breaks the chain.",
+        "next_state_hash is suitable for on-chain storage (Ethereum, Solana, etc.).",
+        "Full chunk-level audit trail is embedded in the parent rim_os_v2 report."
+      ]
+    },
+    "Art_13_transparency": {
+      "article": "Art. 13 \u2014 Transparency",
+      "system_purpose": "RIM-OS performs a deterministic weight-space integrity audit of ML model files. It analyses the mathematical structure of model weights to detect anomalies, quantisation artefacts, and distributional irregularities.",
+      "method_summary": "This report was generated by deterministic mathematical analysis using spectral transforms (NTT over GF 998244353) and manifold descriptors (Penrose P3 quasicrystalline tiling). All results are fully reproducible from the input file.",
+      "output_explanation": {
+        "integrity_score": "34/100 \u2014 composite of entropy health, Penrose conformity, anomaly fraction, and BF16 bias penalty.",
+        "risk_level": "HIGH \u2014 LOW (>=70), MEDIUM (40\u201369), HIGH (<40).",
+        "anomaly_count": "0 chunks flagged as statistical outliers."
+      },
+      "ai_involvement_disclosure": "This audit was performed entirely by deterministic algorithms. No generative AI was used in the scoring or reporting pipeline.",
+      "transparency_level": "HIGH"
+    },
+    "Art_14_oversight": {
+      "article": "Art. 14 \u2014 Human Oversight",
+      "oversight_mechanism": "Automated flag + mandatory human review queue",
+      "review_status": "REQUIRED",
+      "triggers_active": [
+        "requires_human_review flag is SET",
+        "bias_penalty 0.935 > threshold 0.25",
+        "risk_level is HIGH"
+      ],
+      "override_conditions": [
+        "Manual review required if anomaly_fraction > 0.05",
+        "Manual review required if bias_penalty_0_1 > 0.25",
+        "Manual review required if risk_level == HIGH",
+        "Manual review required if requires_human_review == True"
+      ],
+      "oversight_capabilities": [
+        "Auditor can inspect per-chunk manifold hashes to localise anomalies",
+        "Full chunk-level audit trail available in parent report",
+        "Ledger hash chain allows verification of audit integrity",
+        "SVG/PDF report provides visual Penrose manifold for human interpretation"
+      ],
+      "human_review_recommended": true
+    },
+    "Art_15_robustness": {
+      "article": "Art. 15 \u2014 Accuracy, Robustness and Cybersecurity",
+      "input_validation": {
+        "file_format_check": "SKIPPED (non-safetensors file)",
+        "safetensors_parsed": false,
+        "tensor_count": 0
+      },
+      "integrity_verification": {
+        "audit_content_sha256": "b300fdc331fd068d787bcc1c621ab5b0295805c200c716412b077cb5eab05eca",
+        "audit_sha256": "876dfcf60f2e16d854179cb72c4787207bed3019af053a4c5c8ce12a855b4997",
+        "crc_status": "PASS",
+        "deterministic": true,
+        "tamper_evident": true
+      },
+      "error_handling": [
+        "Pipeline continues on per-chunk errors; failed chunks are flagged as anomalies",
+        "Safetensors parse failure falls back to raw binary analysis",
+        "Numpy unavailable: pure-Python fallback path active"
+      ],
+      "adversarial_resistance": [
+        "NTT spectral fingerprint is resistant to simple byte reordering",
+        "Multi-layer pipeline (6 stages) requires adversary to fool all stages simultaneously",
+        "Genesis Frame anchors are physical constants \u2014 immutable reference points",
+        "Chunk-level ledger chain detects partial file tampering"
+      ],
+      "accuracy_metrics": {
+        "avg_entropy_bits": 2.94770277922009,
+        "avg_penrose_match": 0.36137111335565814,
+        "avg_kag_separability": 0.8930150490476494,
+        "conformity_passed": false
+      },
+      "security_notes": [
+        "This tool audits weights at rest. Network-level security is out of scope.",
+        "Recommend encrypted storage for audit reports containing weight hashes."
+      ]
+    },
+    "conformity": {
+      "compliance_status": "FAIL",
+      "description": "One or more critical thresholds exceeded. Human review REQUIRED before any deployment.",
+      "integrity_score": 34,
+      "risk_level": "HIGH",
+      "human_review_needed": true,
+      "articles_assessed": [
+        "Art. 9  \u2014 Risk Management System",
+        "Art. 10 \u2014 Data and Data Governance",
+        "Art. 11 \u2014 Technical Documentation",
+        "Art. 12 \u2014 Record-Keeping",
+        "Art. 13 \u2014 Transparency",
+        "Art. 14 \u2014 Human Oversight",
+        "Art. 15 \u2014 Accuracy, Robustness and Cybersecurity"
+      ],
+      "disclaimer": "This report is generated by deterministic mathematical analysis (RIM-OS pipeline). It is informational only and does not constitute a legal conformity assessment under Art. 43 EU AI Act. Consult a notified body or qualified legal counsel for official certification."
+    },
+    "audit_hash": "0fcd6cc37c7aaa6d92587e5f975df400cf00f1522417c4805dd55fbb56ca32b6"
+  },
+  "EU_AI_ACT_HASH": "0fcd6cc37c7aaa6d92587e5f975df400cf00f1522417c4805dd55fbb56ca32b6",
+  "ledger": {
+    "ledger_id": "RIM-OS-LEDGER",
+    "sequence_number": 0,
+    "prev_state": "d66861dc30d18437ba2763bb11b05f7063b7952f492d1d89cdad8f1bb7434324",
+    "next_state_hash": "3a67d804105162c5601d635a73eac6b20e472357dda97a7be761becec4296722",
+    "audit_content_sha256": "b300fdc331fd068d787bcc1c621ab5b0295805c200c716412b077cb5eab05eca",
+    "entry_hash": "846db86deab8dc9d4d71b089eacc41ac70712cc9a0ddc1e9a4e2957c62b45970"
+  },
+  "legal_disclosures": {
+    "weight_space_scope": "This audit evaluates static model weight artifacts only. The PASS97 pipeline examines cryptographic properties, structural integrity, and provenance markers within the serialized weight files. No inference, runtime behavior, or training data analysis is performed.",
+    "notified_body": null,
+    "out_of_scope": [
+      "Runtime model behavior and inference outputs",
+      "Training data composition and provenance",
+      "Downstream application integration",
+      "Hardware-specific execution characteristics",
+      "Model fine-tuning or adaptation results",
+      "Adversarial robustness under deployment",
+      "Bias and fairness metrics (requires inference)",
+      "Environmental and compute efficiency metrics"
+    ],
+    "version": "PASS97-v1.0-2026"
+  },
+  "penrose_details": {
+    "r": 0.435038175382555,
+    "theta": 0.23974344159780775,
+    "sector": 2,
+    "penrose_hash": "5bd481db424c84ec289f0aaedac7b813d40d1c503328469cd9519ae6decdf745",
+    "tau": 0.435038175382555,
+    "tile_hash": "1635bc0df3658f7c24377045e8b0dca0c0fff2d3b0473531e6dbbe406d252753"
+  },
+  "map_position": {
+    "tau_vectors": [
+      0.4809946907644741,
+      0.2962819992302408,
+      0.3503023597742233,
+      0.6329112068858984,
+      0.4147006202579383
+    ],
+    "barycentric": [
+      0.23974344159780775,
+      0.4588060473634371,
+      0.30145051103875514
+    ],
+    "manifold_hash": "5bd481db424c84ec289f0aaedac7b813d40d1c503328469cd9519ae6decdf745",
+    "tile_hash": "1635bc0df3658f7c24377045e8b0dca0c0fff2d3b0473531e6dbbe406d252753"
+  },
+  "artifact_block": {
+    "index": 12,
+    "timestamp": "2026-03-13T10:58:21Z",
+    "artifact_hash": "8370a6cf54caca016a8cc9dc9be68cd20cb69be981e86bbc3f734dd780abff79",
+    "tau_vectors": [
+      0.4809946907644741,
+      0.2962819992302408,
+      0.3503023597742233,
+      0.6329112068858984,
+      0.4147006202579383
+    ],
+    "manifold_hash": "5bd481db424c84ec289f0aaedac7b813d40d1c503328469cd9519ae6decdf745",
+    "tile_hash": "1635bc0df3658f7c24377045e8b0dca0c0fff2d3b0473531e6dbbe406d252753",
+    "barycentric": [
+      0.23974344159780775,
+      0.4588060473634371,
+      0.30145051103875514
+    ],
+    "prev_block_hash": "ab3552188c0d92477443e0d09cb3a779caf65593dd17e2522c3a31a63ad94986",
+    "block_hash": "956d9a90141e33525521ff90f6a8e46ff47a01350596c53e8b905992ca62b975",
+    "type": null,
+    "anchors": null
+  },
+  "tile_hash": "1635bc0df3658f7c24377045e8b0dca0c0fff2d3b0473531e6dbbe406d252753"
+}

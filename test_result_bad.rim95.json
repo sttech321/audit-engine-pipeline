@@ -49,9 +49,9 @@
   "verification": {
     "status": "Verification Failed",
     "confidence": 33,
-    "timestamp": "2026-03-12T19:10:54Z",
+    "timestamp": "2026-03-13T10:58:50Z",
     "checks": [
-      "Stage 1 - Schema & Genesis: OK",
+      "Stage 1 - Schema & Genesis: OK", 
       "Stage 2 - Entropy: avg_entropy_bits=2.4056",
       "Stage 3 - Penrose geometry: avg_penrose_match=0.3596",
       "Stage 4 - Anomalies: anomaly_fraction=0.0000, count=0",
@@ -59,7 +59,7 @@
     ]
   },
   "fileHash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
-  "uploadId": "5d37edae-1f1a-40d1-b92e-d28dd21b97c3",
+  "uploadId": "991e0cee-93c0-4478-9085-ce3ba71a85b9",
   "metadata": {
     "name": "Audit Report: bad.rim95",
     "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
@@ -76,8 +76,8 @@
     "verification_mode": "full"
   },
   "artifactBlock": {
-    "index": 52,
-    "timestamp": "2026-03-12T19:10:54Z",
+    "index": 16,
+    "timestamp": "2026-03-13T10:58:50Z",
     "artifact_hash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
     "tau_vectors": [
       0.07429003396695089,
@@ -93,8 +93,8 @@
       0.36160310593776696,
       0.3010099521010438
     ],
-    "prev_block_hash": "b2eba72d1582b29ad4f4bff17a9b5730183207e2d51e8316cd1c1ade1549823a",
-    "block_hash": "18937950ee5dc00adb90058edf2bbe3c3ef3a5a6628051c37af42bdfef3053b9",
+    "prev_block_hash": "1ced76b8d201568e3f0dfa711f89e8e94abf8c57a592f2383b2a083a824cf210",
+    "block_hash": "336c2a4623e9a1d8ae7b99ee6d63b4dc9afdfc5b4c02b06afa5071f897d24906",
     "type": null,
     "anchors": null
   }

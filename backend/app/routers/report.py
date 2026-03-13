@@ -8,11 +8,14 @@ PASS97 Spec Compliant:
 
 Provides endpoints for generating and downloading audit reports.
 """
+import json
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
 
+from app.config import get_settings
 from app.logging_config import logger
 from app.models.common_schemas import (
     KPI, VerificationStatus, RiskBadge, Anomaly, AnomalyType,
@@ -31,14 +34,73 @@ router = APIRouter()
 _audit_cache: dict = {}
 
 
+def _report_cache_dir() -> Path:
+    """Resolve the persistent cache directory for audit reports."""
+    settings = get_settings()
+    path = Path(settings.report_cache_dir)
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parents[2] / path
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _report_cache_path(upload_id: str) -> Path:
+    """Get the on-disk cache file for a report."""
+    return _report_cache_dir() / f"{upload_id}.json"
+
+
+def _write_audit_to_disk(upload_id: str, result: ExtendedAuditResult) -> None:
+    """Persist an audit result so report URLs survive process restarts."""
+    cache_path = _report_cache_path(upload_id)
+    cache_path.write_text(
+        json.dumps(result.model_dump(mode="json"), indent=2),
+        encoding="utf-8",
+    )
+
+
+def _read_audit_from_disk(upload_id: str) -> Optional[ExtendedAuditResult]:
+    """Load a persisted audit result if it exists."""
+    cache_path = _report_cache_path(upload_id)
+    if not cache_path.exists():
+        return None
+
+    try:
+        return ExtendedAuditResult.model_validate_json(
+            cache_path.read_text(encoding="utf-8")
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to load cached audit result for %s from %s: %s",
+            upload_id,
+            cache_path,
+            exc,
+        )
+        return None
+
+
 def cache_audit_result(upload_id: str, result: ExtendedAuditResult) -> None:
     """Cache an audit result for later report generation."""
     _audit_cache[upload_id] = result
+    try:
+        _write_audit_to_disk(upload_id, result)
+    except Exception as exc:
+        logger.warning(
+            "Failed to persist audit result for %s: %s",
+            upload_id,
+            exc,
+        )
 
 
 def get_cached_audit(upload_id: str) -> Optional[ExtendedAuditResult]:
     """Retrieve a cached audit result."""
-    return _audit_cache.get(upload_id)
+    cached = _audit_cache.get(upload_id)
+    if cached is not None:
+        return cached
+
+    cached = _read_audit_from_disk(upload_id)
+    if cached is not None:
+        _audit_cache[upload_id] = cached
+    return cached
 
 
 # ─── Report Endpoints ────────────────────────────────────────────────────────

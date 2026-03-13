@@ -191,6 +191,11 @@ PDF_STYLES = """
         font-size: 11px;
         color: #94a3b8;
     }
+    .footer-note {
+        margin-top: 8px;
+        font-size: 10px;
+        color: #94a3b8;
+    }
 </style>
 """
 
@@ -635,7 +640,7 @@ def generate_fpdf_report(
     pdf.multi_cell(0, 4, str(eu_ai_act.disclaimer))
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
-    
+
     # Legal Disclosures
     pdf.section_title('Legal Scope Disclosures')
     pdf.set_fill_color(255, 251, 235)

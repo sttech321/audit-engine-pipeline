@@ -134,7 +134,6 @@ const getArticleCards = (value: Record<string, unknown> | null) =>
     };
   }).filter((item): item is { key: string; title: string; summary: string } => item !== null);
 
-/* ── Reusable dark-glass section card ── */
 const Section = ({
   title,
   description,
@@ -186,7 +185,7 @@ export default function ReportPage() {
   const [report, setReport] = useState<ReportWithChain | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRawPayloadOpen, setIsRawPayloadOpen] = useState(false);
+  const [isEuPayloadOpen, setIsEuPayloadOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -640,113 +639,6 @@ export default function ReportPage() {
               </div>
             </Section>
 
-            {/* Audit Details */}
-            <Section
-              title="Audit Evidence"
-              description="Compliance, legal scope, and supporting evidence preserved beneath the map layer."
-            >
-              <div className="space-y-5">
-                <InfoTile label="EU AI Act Mapping" icon={Scale}>
-                  <p className="text-sm text-slate-300">
-                    {report.eu_ai_act.assessment}
-                  </p>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Category: {report.eu_ai_act.category} · Reference:{" "}
-                    {report.eu_ai_act.article_reference}
-                  </p>
-                </InfoTile>
-
-                {report.EU_AI_ACT_HASH && (
-                  <InfoTile label="EU AI Act Report Hash" icon={Fingerprint} full>
-                    <p className="break-all font-mono text-xs leading-6 text-amber-200/70 rounded-xl border border-amber-300/15 bg-amber-300/5 p-3">
-                      {report.EU_AI_ACT_HASH}
-                    </p>
-                  </InfoTile>
-                )}
-
-                {euAiConformity && (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <InfoTile label="EU AI Act Conformity">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-slate-200">
-                          {complianceStatus.replaceAll("_", " ")}
-                        </p>
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${complianceBadge}`}
-                        >
-                          {complianceStatus.replaceAll("_", " ")}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm text-slate-300">
-                        {String(euAiConformity.description ?? "Not available")}
-                      </p>
-                      <p className="mt-2 text-xs text-slate-500">
-                        Review required: {String(euAiConformity.human_review_needed ?? "unknown")}
-                      </p>
-                    </InfoTile>
-                    <InfoTile label="Layer Metadata">
-                      <p className="text-sm text-slate-300">
-                        {String(euAiMeta?.layer_version ?? "Unknown layer")}
-                      </p>
-                      <p className="mt-2 text-xs text-slate-500">
-                        Generated for schema {String(euAiMeta?.schema ?? "unknown")}
-                      </p>
-                      <p className="mt-2 text-xs text-slate-500">
-                        Target file: {String(euAiMeta?.target_file ?? "unknown")}
-                      </p>
-                    </InfoTile>
-                  </div>
-                )}
-
-                {euAiArticles.length > 0 && (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {euAiArticles.map((article) => (
-                      <div
-                        key={article.key}
-                        className="rounded-2xl border border-white/8 bg-slate-900/60 p-5"
-                      >
-                        <p className="text-sm font-semibold text-slate-200">
-                          {article.title}
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-slate-400">
-                          {article.summary}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <InfoTile label="Legal Scope" icon={ListChecks}>
-                  <p className="text-sm text-slate-300">
-                    {report.legal_disclosures.weight_space_scope}
-                  </p>
-                </InfoTile>
-
-                {euAiFull && (
-                  <div className="rounded-2xl border border-white/8 bg-slate-900/60 p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-200">
-                          EU AI Act Raw Payload
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Open the full attached payload in a dedicated viewer.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsRawPayloadOpen(true)}
-                        className="rounded-full border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-sky-300 transition hover:border-sky-300/50 hover:bg-sky-300/15"
-                      >
-                        View Payload
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Section>
-          </div>
-
           {/* ── Right column ── */}
           <div className="space-y-8">
             {/* KPI Summary */}
@@ -863,11 +755,129 @@ export default function ReportPage() {
               </div>
             </Section>
 
+            <div className="text-xs text-slate-400 text-center mt-8 border-t border-slate-800 pt-4">
+              <strong>Regulatory Note:</strong> This report includes structured analytical outputs that may support
+              evaluation under the{" "}
+              <strong>EU AI Act (Regulation (EU) 2024/1689), Articles 9–15</strong>.
+              The results are generated through deterministic mathematical analysis and are provided
+              for informational purposes only. This report does not constitute a formal conformity
+              assessment or certification under the EU AI Act.
+            </div>
+
           </div>
         </div>
+
+            {/* Audit Details */}
+            <Section
+              title="Audit Evidence"
+              description="Compliance, legal scope, and supporting evidence preserved beneath the map layer."
+            >
+              <div className="space-y-5">
+                <InfoTile label="EU AI Act Mapping" icon={Scale}>
+                  <p className="text-sm text-slate-300">
+                    {report.eu_ai_act.assessment}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Category: {report.eu_ai_act.category} - Reference:{" "}
+                    {report.eu_ai_act.article_reference}
+                  </p>
+                </InfoTile>
+
+                {report.EU_AI_ACT_HASH && (
+                  <InfoTile label="EU AI Act Report Hash" icon={Fingerprint} full>
+                    <p className="break-all font-mono text-xs leading-6 text-amber-200/70 rounded-xl border border-amber-300/15 bg-amber-300/5 p-3">
+                      {report.EU_AI_ACT_HASH}
+                    </p>
+                  </InfoTile>
+                )}
+
+                {euAiConformity && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <InfoTile label="EU AI Act Conformity">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-200">
+                          {complianceStatus.replaceAll("_", " ")}
+                        </p>
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${complianceBadge}`}
+                        >
+                          {complianceStatus.replaceAll("_", " ")}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-300">
+                        {String(euAiConformity.description ?? "Not available")}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Review required: {String(euAiConformity.human_review_needed ?? "unknown")}
+                      </p>
+                    </InfoTile>
+                    <InfoTile label="Layer Metadata">
+                      <p className="text-sm text-slate-300">
+                        {String(euAiMeta?.layer_version ?? "Unknown layer")}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Generated for schema {String(euAiMeta?.schema ?? "unknown")}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Target file: {String(euAiMeta?.target_file ?? "unknown")}
+                      </p>
+                    </InfoTile>
+                  </div>
+                )}
+
+                {euAiArticles.length > 0 && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {euAiArticles.map((article) => (
+                      <div
+                        key={article.key}
+                        className="rounded-2xl border border-white/8 bg-slate-900/60 p-5"
+                      >
+                        <p className="text-sm font-semibold text-slate-200">
+                          {article.title}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
+                          {article.summary}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <InfoTile label="Legal Scope" icon={ListChecks}>
+                  <p className="text-sm text-slate-300">
+                    {report.legal_disclosures.weight_space_scope}
+                  </p>
+                </InfoTile>
+
+                {euAiFull && (
+                  <div className="rounded-2xl border border-white/8 bg-slate-900/60 p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-200">
+                          EU AI Act Raw Payload
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Full structured attachment returned by the backend.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsEuPayloadOpen(true)}
+                        className="rounded-full border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-sky-300 transition hover:border-sky-300/50 hover:bg-sky-300/15"
+                      >
+                        View Payload
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Section>
+
+          </div>
+
       </main>
 
-      {euAiFull && isRawPayloadOpen && (
+      {euAiFull && isEuPayloadOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-5xl rounded-[2rem] border border-white/10 bg-slate-950 shadow-2xl shadow-black/50">
             <div className="flex items-center justify-between gap-4 border-b border-white/8 px-6 py-5">
@@ -881,7 +891,7 @@ export default function ReportPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsRawPayloadOpen(false)}
+                onClick={() => setIsEuPayloadOpen(false)}
                 className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:border-white/20 hover:bg-white/10"
               >
                 Close

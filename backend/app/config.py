@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     chunk_upload_temp_dir: str = ""  # Empty = system temp
     worker_timeout_seconds: int = 3600  # Default timeout for CPU-bound worker tasks
     artifact_chain_path: str = "data/artifact_chain.json"  # Local artifact-position chain
+    report_cache_dir: str = "data/report_cache"  # Persistent audit report cache
     
     # Audit Pipeline Constants
     prime_p: int = 2**127 - 1  # Mersenne prime for p-adic arithmetic

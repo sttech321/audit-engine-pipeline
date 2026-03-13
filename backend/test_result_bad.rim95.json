@@ -8,52 +8,94 @@
     {
       "id": "kpi-1",
       "label": "Audit Score",
-      "value": 98.5,
-      "trend": "up",
-      "status": "excellent",
-      "description": "Overall cryptographic integrity score"
+      "value": 33.0,
+      "trend": "down",
+      "status": "warning",
+      "description": "RIM-OS integrity score (0\u2013100)"
     },
     {
       "id": "kpi-2",
       "label": "Issues Found",
       "value": 0,
       "trend": "down",
-      "status": "good",
-      "description": "Number of critical vulnerabilities found"
+      "status": "warning",
+      "description": "Count of anomalous chunks detected by RIM-OS"
     },
     {
       "id": "kpi-3",
+      "label": "KAG Score",
+      "value": "0.9045",
+      "trend": "up",
+      "status": "warning",
+      "description": "Average KAG separability from RIM-OS"
+    },
+    {
+      "id": "kpi-4",
       "label": "Coverage",
-      "value": "100%",
+      "value": "100.0%",
+      "trend": "up",
+      "status": "warning",
+      "description": "1 \u2212 anomaly_fraction, scaled to percentage"
+    },
+    {
+      "id": "kpi-5",
+      "label": "Penrose Sector",
+      "value": 0,
       "trend": "stable",
-      "status": "excellent",
-      "description": "Codebase paths verified"
+      "status": "warning",
+      "description": "Penrose details are now handled solely inside RIM-OS"
     }
   ],
   "verification": {
-    "status": "Verified",
-    "confidence": 99,
-    "timestamp": "1772047062.7886848",
+    "status": "Verification Failed",
+    "confidence": 33,
+    "timestamp": "2026-03-13T11:43:18Z",
     "checks": [
-      "Signature Valid",
-      "Hash Match",
-      "Structure Intact"
+      "Stage 1 - Schema & Genesis: OK",
+      "Stage 2 - Entropy: avg_entropy_bits=2.4056",
+      "Stage 3 - Penrose geometry: avg_penrose_match=0.3596",
+      "Stage 4 - Anomalies: anomaly_fraction=0.0000, count=0",
+      "Stage 5 - Risk: risk_level=HIGH"
     ]
   },
   "fileHash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
-  "uploadId": "a983b926-bb78-4631-aba4-451eec4c093a",
+  "uploadId": "e2a766e6-24ff-4c48-8ec5-eed617a950ce",
   "metadata": {
     "name": "Audit Report: bad.rim95",
     "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
     "attributes": [
       {
         "trait_type": "Audit Score",
-        "value": 98.5
+        "value": 33.0
       },
       {
         "trait_type": "Status",
-        "value": "Verified"
+        "value": "Verification Failed"
       }
-    ]
+    ],
+    "verification_mode": "full"
+  },
+  "artifactBlock": {
+    "index": 38,
+    "timestamp": "2026-03-13T11:43:18Z",
+    "artifact_hash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
+    "tau_vectors": [
+      0.07429003396695089,
+      0.17605025064829538,
+      0.21731081611628023,
+      0.6717563449071897,
+      0.18591825733068623
+    ],
+    "manifold_hash": "8846269f931e6f5034481d35a9588ecd3d75ab306585cbd554f695fab830dc70",
+    "tile_hash": "44d4182e89eb89f21e8d04b7c35a811eea0ee4323adce725264b89fec1f03c62",
+    "barycentric": [
+      0.3373869419611893,
+      0.36160310593776696,
+      0.3010099521010438
+    ],
+    "prev_block_hash": "314ac6824b947d310a47f3e3aebcc840d59d1d486560009e63c79911f2903df7",
+    "block_hash": "d1b8d4141ed4298904856249f616c3e562d3d32957c614c72d130bc46e74a62a",
+    "type": null,
+    "anchors": null
   }
 }
