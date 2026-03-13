@@ -255,7 +255,7 @@ export default function Home() {
       {/* ── Hero ── */}
       <main className="relative z-10">
         <section className="mx-auto max-w-7xl px-4 pt-24 pb-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-4xl text-center">
+          <div className="mx-auto max-w-5xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-5 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-200">
               <Atom className="h-3.5 w-3.5" />
               Mathematical cartography for binary systems
@@ -407,7 +407,7 @@ export default function Home() {
 
         {/* ── Learning graph section ── */}
         <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="rounded-[2.5rem] border border-white/8 bg-slate-950/50 p-10 backdrop-blur lg:p-14">
+          <div className="relative overflow-hidden rounded-[2.5rem] border border-white/8 bg-slate-950/50 p-10 backdrop-blur lg:p-14">
             <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
               <div>
                 <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
@@ -442,7 +442,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="grid gap-5 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <div className="grid gap-5 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2">
                 {[
                   {
                     label: "Memory",
@@ -489,8 +489,9 @@ export default function Home() {
                 Native Formats
               </p>
               <p className="text-base leading-7 text-slate-300">
-                <span className="font-mono text-amber-200">.lm3z</span>{" "}
-                <span className="font-mono text-amber-200">.rim0</span>{" "}
+                Native formats such as{" "}
+                <span className="font-mono text-amber-200">.lm3z</span>,{" "}
+                <span className="font-mono text-amber-200">.rim0</span>,{" "}
                 <span className="font-mono text-amber-200">.rim95</span>{" "}
                 <span className="font-mono text-amber-200">.safetensors</span>{" "}
                 <span className="font-mono text-amber-200">.bin</span>{" "}
@@ -499,7 +500,7 @@ export default function Home() {
                 <span className="font-mono text-amber-200">.pth</span>{" "}
                 <span className="font-mono text-amber-200">.ckpt</span>{" "}
                 <span className="font-mono text-amber-200">.onnx</span>{" "}
-                use the full verification route with PASS97 deep audit.
+                are also supported and receive limited analysis.
               </p>
             </div>
             <Link
