@@ -627,7 +627,7 @@ export default function UploadPage() {
                   itself.
                 </p>
               </div>
-              <MintFlow uploadData={uploadData} />
+              {/* <MintFlow uploadData={uploadData} /> */}
             </div>
 
             <div className="text-center">

@@ -247,7 +247,7 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <WalletMultiButton className="!bg-amber-500 !text-slate-950 hover:!bg-amber-400 !rounded-xl !font-semibold" />
+            {/* <WalletMultiButton className="!bg-amber-500 !text-slate-950 hover:!bg-amber-400 !rounded-xl !font-semibold" /> */}
           </div>
         </div>
       </header>
