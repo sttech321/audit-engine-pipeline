@@ -49,7 +49,7 @@
   "verification": {
     "status": "Verification Failed",
     "confidence": 33,
-    "timestamp": "2026-03-13T11:43:18Z",
+    "timestamp": "2026-03-13T16:26:56Z",
     "checks": [
       "Stage 1 - Schema & Genesis: OK",
       "Stage 2 - Entropy: avg_entropy_bits=2.4056",
@@ -59,7 +59,7 @@
     ]
   },
   "fileHash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
-  "uploadId": "e2a766e6-24ff-4c48-8ec5-eed617a950ce",
+  "uploadId": "1fe02367-814c-441b-9306-fc08530f9e10",
   "metadata": {
     "name": "Audit Report: bad.rim95",
     "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
@@ -76,25 +76,25 @@
     "verification_mode": "full"
   },
   "artifactBlock": {
-    "index": 38,
-    "timestamp": "2026-03-13T11:43:18Z",
+    "index": 55,
+    "timestamp": "2026-03-13T16:26:56Z",
     "artifact_hash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
     "tau_vectors": [
-      0.07429003396695089,
-      0.17605025064829538,
-      0.21731081611628023,
-      0.6717563449071897,
-      0.18591825733068623
+      0.9066624331551252,
+      0.5517315917554427,
+      0.9672769950888935,
+      0.9904199093713556,
+      0.8351564603054576
     ],
-    "manifold_hash": "8846269f931e6f5034481d35a9588ecd3d75ab306585cbd554f695fab830dc70",
-    "tile_hash": "44d4182e89eb89f21e8d04b7c35a811eea0ee4323adce725264b89fec1f03c62",
+    "manifold_hash": "b2375def6003bd6b0d4fd802c9a771f9f48e82e2eef33e340bd5011885b17fac",
+    "tile_hash": "fb4b70ff89b5600a3ebb1c6b51e5b23af2bfbd83459ee38dba575dd398818f04",
     "barycentric": [
-      0.3373869419611893,
-      0.36160310593776696,
-      0.3010099521010438
+      0.2796931446271041,
+      0.3797728835720737,
+      0.3405339718008221
     ],
-    "prev_block_hash": "314ac6824b947d310a47f3e3aebcc840d59d1d486560009e63c79911f2903df7",
-    "block_hash": "d1b8d4141ed4298904856249f616c3e562d3d32957c614c72d130bc46e74a62a",
+    "prev_block_hash": "6f95babce6178c29ff4531b2f0c85d352ecb1a53c4a918ac5093fd560df29f5c",
+    "block_hash": "86e97ed5e654e8bbe2c5019de959f34ac640499c6130515b42f0f1ba6ebb88d6",
     "type": null,
     "anchors": null
   }

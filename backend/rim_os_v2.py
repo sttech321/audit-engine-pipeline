@@ -42,7 +42,12 @@ from __future__ import annotations
 
 import argparse, base64, hashlib, json, math, mmap, os
 import struct, sys, time, zlib
+from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+
+# Parallel audit: workers and batch size (batch = max chunks processed per parallel round)
+_AUDIT_WORKERS = min(4, os.cpu_count() or 4)
+_AUDIT_BATCH_CHUNKS = 64
 
 try:
     import numpy as np
@@ -904,41 +909,54 @@ def audit_file(path: str,
 
     with open(path, "rb") as f:
         ci = 0
-        while True:
-            if max_chunks is not None and ci >= max_chunks: break
-            chunk = f.read(CHUNK_BYTES)
-            if not chunk: break
-            desc = process_chunk(chunk)
+        with ProcessPoolExecutor(max_workers=_AUDIT_WORKERS) as executor:
+            while True:
+                # Read one batch of chunks (bounded memory)
+                batch: List[Tuple[int, bytes]] = []
+                for _ in range(_AUDIT_BATCH_CHUNKS):
+                    if max_chunks is not None and ci >= max_chunks:
+                        break
+                    chunk = f.read(CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    batch.append((ci, chunk))
+                    ci += 1
+                if not batch:
+                    break
 
-            # compute tau5 and barycentric position for this chunk
-            tau5 = _pentagrid_tau(desc["chain"]["kag_hash"])
-            tw   = sum(tau5) / 5.0
-            bary = _barycentric(tau5, gm)
+                # Process batch in parallel; map preserves order
+                chunk_bytes_only = [c for _, c in batch]
+                desc_list = list(executor.map(process_chunk, chunk_bytes_only))
 
-            row = {
-                "chunk_index":  ci,
-                "offset":       int(ci * CHUNK_BYTES),
-                "size":         len(chunk),
-                "entropy_bits": desc["stats"]["entropy_bits"],
-                "chi2":         desc["stats"]["chi2"],
-                "autocorr16":   desc["stats"]["autocorr16"],
-                "hi_entropy":   desc["hi_entropy"],
-                "lo_entropy":   desc["lo_entropy"],
-                "separability": desc["separability"],
-                "match_score":  desc["match_score"],
-                "manifold_hash": desc["manifold_hash"],
-                "tile_hash":    desc["tile_hash"],
-                "tau_pentagrid": tau5,
-                "tau_omega_norm": float(tw),
-                "barycentric":  bary,
-                "region":       _dominant_region(bary, gm),
-            }
-            chunks.append(row)
-            ci += 1
+                # Build rows in order (tau/bary in main thread for genesis consistency)
+                for (cidx, chunk), desc in zip(batch, desc_list):
+                    tau5 = _pentagrid_tau(desc["chain"]["kag_hash"])
+                    tw   = sum(tau5) / 5.0
+                    bary = _barycentric(tau5, gm)
+                    row = {
+                        "chunk_index":  cidx,
+                        "offset":       int(cidx * CHUNK_BYTES),
+                        "size":         len(chunk),
+                        "entropy_bits": desc["stats"]["entropy_bits"],
+                        "chi2":         desc["stats"]["chi2"],
+                        "autocorr16":   desc["stats"]["autocorr16"],
+                        "hi_entropy":   desc["hi_entropy"],
+                        "lo_entropy":   desc["lo_entropy"],
+                        "separability": desc["separability"],
+                        "match_score":  desc["match_score"],
+                        "manifold_hash": desc["manifold_hash"],
+                        "tile_hash":    desc["tile_hash"],
+                        "kag_hash":     desc["chain"]["kag_hash"],
+                        "tau_pentagrid": tau5,
+                        "tau_omega_norm": float(tw),
+                        "barycentric":  bary,
+                        "region":       _dominant_region(bary, gm),
+                    }
+                    chunks.append(row)
 
-            if ci % 50 == 0 or ci * CHUNK_BYTES >= total:
+                # Progress after each batch
                 pct  = 100.0 * min(ci * CHUNK_BYTES, total) / total
-                rate = min(ci * CHUNK_BYTES, total) / max(1e-6, time.time()-t0)
+                rate = min(ci * CHUNK_BYTES, total) / max(1e-6, time.time() - t0)
                 if progress_callback:
                     progress_callback(pct)
                 sys.stderr.write(f"\r[RIM-OS v2] chunk={ci} {pct:.1f}%"
@@ -962,12 +980,30 @@ def audit_file(path: str,
 
     ledger = build_ledger(chunks, prev_state)
 
-    first_chunk = chunks[0] if chunks else {}
+    # Global artifact map position derived from all chunks.
+    # Sort by chunk_index so the seed is independent of processing order.
+    if chunks:
+        seed = hashlib.sha256()
+        for c in sorted(chunks, key=lambda x: x["chunk_index"]):
+            kh = c.get("kag_hash")
+            if isinstance(kh, str) and kh:
+                seed.update(kh.encode("ascii"))
+        combined_seed = seed.hexdigest()
+        tau_vectors = _pentagrid_tau(combined_seed)
+        bary = _barycentric(tau_vectors, gm)
+        manifold_hash = combined_seed
+        tile_hash = canonical_hash(tau_vectors)
+    else:
+        tau_vectors = []
+        bary = []
+        manifold_hash = ""
+        tile_hash = ""
+
     map_position = {
-        "tau_vectors": first_chunk.get("tau_pentagrid", []),
-        "barycentric": first_chunk.get("barycentric", []),
-        "manifold_hash": first_chunk.get("manifold_hash", ""),
-        "tile_hash": first_chunk.get("tile_hash", ""),
+        "tau_vectors": tau_vectors,
+        "barycentric": bary,
+        "manifold_hash": manifold_hash,
+        "tile_hash": tile_hash,
     }
 
     report: Dict[str, Any] = {

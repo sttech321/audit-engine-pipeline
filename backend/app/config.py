@@ -31,9 +31,9 @@ class Settings(BaseSettings):
     
     # File Processing Limits
     min_file_size: int = 32  # Minimum bytes for valid audit artifact
-    max_file_size: int = 10_000_000_000  # 10GB
+    max_file_size: int = 10 * 1024 * 1024 * 1024  # 10 GiB
     max_batch_files: int = 20  # Maximum files per batch upload
-    max_batch_total_size: int = 20_000_000_000  # 20GB total across batch (soft guard)
+    max_batch_total_size: int = 20 * 1024 * 1024 * 1024  # 20 GiB total across batch (soft guard)
 
     # Chunked Upload (large files 1–10 GB)
     chunk_upload_enabled: bool = True

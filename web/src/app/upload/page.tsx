@@ -28,7 +28,7 @@ import type {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const BASE = `${API_URL}/api`;
 const MAX_FILE_SIZE_BYTES = Number(
-  process.env.NEXT_PUBLIC_MAX_FILE_SIZE_BYTES || 10_000_000_000,
+  process.env.NEXT_PUBLIC_MAX_FILE_SIZE_BYTES || 10 * 1024 * 1024 * 1024,
 );
 
 const CHUNK_THRESHOLD = 100 * 1024 * 1024;

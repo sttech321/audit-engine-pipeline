@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional
+import time
 
 try:
     # RIM-OS v2 deterministic audit engine (canonical math layer).
@@ -10,6 +11,8 @@ except ImportError as exc:  # pragma: no cover - import wiring error
         "rim_wrapper requires the RIM-OS v2 engine to be importable as "
         "`rim_os_v2`. Ensure `rim_os_v2.py` is on PYTHONPATH."
     ) from exc
+
+from app.logging_config import logger
 
 
 # ─── Genesis & schema configuration ─────────────────────────────────────────────
@@ -63,11 +66,35 @@ def run_rim_audit(
         RuntimeError: If the reported schema or genesis frame hash do not
             match the expected values derived from `GENESIS`.
     """
+    t_start = time.time()
     report = audit_file(
         file_path,
         genesis=GENESIS,
         prev_state=prev_state,
         progress_callback=progress_callback,
+    )
+    audit_time = time.time() - t_start
+
+    # Lightweight performance telemetry for client transparency.
+    inp = report.get("input", {}) or {}
+    size_bytes = int(inp.get("size_bytes", 0) or 0)
+    chunk_count = int(inp.get("chunk_count", 0) or 0)
+    avg_chunk_time = audit_time / chunk_count if chunk_count else 0.0
+
+    size_mb = size_bytes / (1024 * 1024)
+    logger.info(
+        "RIM-OS audit completed: size=%d bytes, chunks=%d, audit_time=%.3f s, avg_chunk_time=%.4f s",
+        size_bytes,
+        chunk_count,
+        audit_time,
+        avg_chunk_time,
+    )
+    logger.info(
+        "Artifact size: %.1f MB | Chunks: %d | Audit time: %.2f seconds | Avg chunk time: %.3f seconds",
+        size_mb,
+        chunk_count,
+        audit_time,
+        avg_chunk_time,
     )
 
     schema = report.get("schema")

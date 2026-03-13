@@ -49,9 +49,9 @@
   "verification": {
     "status": "Verification Failed",
     "confidence": 33,
-    "timestamp": "2026-03-13T10:58:50Z",
+    "timestamp": "2026-03-13T15:53:27Z",
     "checks": [
-      "Stage 1 - Schema & Genesis: OK", 
+      "Stage 1 - Schema & Genesis: OK",
       "Stage 2 - Entropy: avg_entropy_bits=2.4056",
       "Stage 3 - Penrose geometry: avg_penrose_match=0.3596",
       "Stage 4 - Anomalies: anomaly_fraction=0.0000, count=0",
@@ -59,7 +59,7 @@
     ]
   },
   "fileHash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
-  "uploadId": "991e0cee-93c0-4478-9085-ce3ba71a85b9",
+  "uploadId": "a02c1f0f-46c5-499d-9262-e13282a5541d",
   "metadata": {
     "name": "Audit Report: bad.rim95",
     "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
@@ -76,25 +76,25 @@
     "verification_mode": "full"
   },
   "artifactBlock": {
-    "index": 16,
-    "timestamp": "2026-03-13T10:58:50Z",
+    "index": 48,
+    "timestamp": "2026-03-13T15:53:27Z",
     "artifact_hash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
     "tau_vectors": [
-      0.07429003396695089,
-      0.17605025064829538,
-      0.21731081611628023,
-      0.6717563449071897,
-      0.18591825733068623
+      0.9066624331551252,
+      0.5517315917554427,
+      0.9672769950888935,
+      0.9904199093713556,
+      0.8351564603054576
     ],
-    "manifold_hash": "8846269f931e6f5034481d35a9588ecd3d75ab306585cbd554f695fab830dc70",
-    "tile_hash": "44d4182e89eb89f21e8d04b7c35a811eea0ee4323adce725264b89fec1f03c62",
+    "manifold_hash": "b2375def6003bd6b0d4fd802c9a771f9f48e82e2eef33e340bd5011885b17fac",
+    "tile_hash": "fb4b70ff89b5600a3ebb1c6b51e5b23af2bfbd83459ee38dba575dd398818f04",
     "barycentric": [
-      0.3373869419611893,
-      0.36160310593776696,
-      0.3010099521010438
+      0.2796931446271041,
+      0.3797728835720737,
+      0.3405339718008221
     ],
-    "prev_block_hash": "1ced76b8d201568e3f0dfa711f89e8e94abf8c57a592f2383b2a083a824cf210",
-    "block_hash": "336c2a4623e9a1d8ae7b99ee6d63b4dc9afdfc5b4c02b06afa5071f897d24906",
+    "prev_block_hash": "5b83388ec4762ed4cd984688790265cb9cf872985249852be77185b28ab7e9b5",
+    "block_hash": "7dd3f3f251e153c8c8fc2414aaf879596bc669321d422ba512933d8c1c7d67d4",
     "type": null,
     "anchors": null
   }
