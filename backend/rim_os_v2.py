@@ -223,12 +223,12 @@ def _pentagrid_tau(kag_hash: str) -> List[float]:
     """kag_hash → five pentagrid offsets τ[0..4] ∈ [0,1)."""
     bs = bytes.fromhex(kag_hash)
     if len(bs) < 40:
-        seed = bs
-        material = bytearray(bs)
-        counter = 0
+        # Expand to at least 40 bytes using chained hashing (deterministic).
+        h = hashlib.sha256(bs).digest()
+        material = bytearray(bs + h)
         while len(material) < 40:
-            material.extend(hashlib.sha256(seed + counter.to_bytes(1, "little")).digest())
-            counter += 1
+            h = hashlib.sha256(h).digest()
+            material.extend(h)
         bs = bytes(material[:40])
     return [(int.from_bytes(bs[i*8:(i+1)*8], "little") % (1 << 53)) / float(1 << 53)
             for i in range(5)]

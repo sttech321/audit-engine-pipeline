@@ -527,6 +527,7 @@ async def upload_audit_batch(
             resp: UploadResponse = await upload_audit_file(request, file)
             return {
                 "fileName": resp.fileInfo.name,
+                "fileSize": resp.fileInfo.size,
                 "status": "ok",
                 "uploadId": resp.uploadId,
                 "verification": resp.verification,
@@ -537,12 +538,14 @@ async def upload_audit_batch(
             # Preserve structured error detail where available.
             return {
                 "fileName": file.filename or "",
+                "fileSize": None,
                 "status": "failed",
                 "error": exc.detail,
             }
         except Exception as exc:  # pragma: no cover - defensive
             return {
                 "fileName": file.filename or "",
+                "fileSize": None,
                 "status": "failed",
                 "error": str(exc),
             }
@@ -551,7 +554,8 @@ async def upload_audit_batch(
     results = await asyncio.gather(*tasks)
 
     batch_id = str(uuid.uuid4())
-    total_size = sum(getattr(f, "spool_max_size", 0) or 0 for f in files)
+    # Soft guard should use real processed sizes, not UploadFile spool settings.
+    total_size = sum(int(r.get("fileSize") or 0) for r in results)
     if total_size > settings.max_batch_total_size:
         # Soft guard: warn but still return per-file results.
         logger.warning(
