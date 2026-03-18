@@ -3,12 +3,12 @@ File validation service with secure file handling.
 
 This is an ADDITIVE service that provides:
 - Streaming file upload with SpooledTemporaryFile
-- Extension validation for PASS97-supported formats
+- Extension validation for RIMOS-supported formats
 - MIME type validation
 - Size validation (preserves existing error behavior)
 
 NOTE:
-- PASS97 upload endpoints enforce supported extensions:
+- RIMOS upload endpoints enforce supported extensions:
   .lm3z, .rim0, .rim95, .safetensors, .bin, .gguf, .pt, .pth, .ckpt, .onnx.
 """
 import hashlib
@@ -25,7 +25,7 @@ from app.models.error_schemas import ErrorCode, StructuredError
 
 # ─── File Types ───────────────────────────────────────────────────────────────
 
-# Extensions supported by PASS97 upload endpoints.
+# Extensions supported by RIMOS upload endpoints.
 SUPPORTED_EXTENSIONS = {
     ".lm3z",
     ".rim0",
@@ -98,7 +98,7 @@ def get_file_extension(filename: str) -> str:
 
 def validate_file_extension(filename: str) -> Tuple[bool, Optional[StructuredError]]:
     """
-    Validate file extension against the PASS97-supported set.
+    Validate file extension against the RIMOS-supported set.
     
     Args:
         filename: Original filename
@@ -171,7 +171,7 @@ async def read_file_streaming(
         # Larger files are written to a temporary file
         with tempfile.SpooledTemporaryFile(max_size=SPOOL_MAX_SIZE) as spooled:
             total_size = 0
-            chunk_size = 1 * 1024 * 1024  # 1 MiB chunks (PASS97 spec compliant)
+            chunk_size = 1 * 1024 * 1024  # 1 MiB chunks (RIMOS spec compliant)
             
             while True:
                 chunk = await file.read(chunk_size)

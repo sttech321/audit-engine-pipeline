@@ -65,7 +65,7 @@ class UploadSession:
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     # Per-chunk locks allow concurrent writes to different offsets (no lock contention across chunks)
     _chunk_locks: Dict[int, asyncio.Lock] = field(default_factory=dict)
-    # Whether this filename maps to a PASS97-native format that should be
+    # Whether this filename maps to a RIMOS-native format that should be
     # advertised as "full audit" in responses. Other extensions still receive
     # analysis but are reported as limited mode.
     supported_format: bool = True
@@ -183,7 +183,7 @@ class ChunkedUploadService:
         """Create new upload session. Returns (upload_id, [] for new or existing chunk indices for resume)."""
         # Extension awareness only – we no longer reject based solely on file
         # extension. Instead, we track whether the artifact is in a
-        # PASS97-native format so that the response can distinguish full
+        # RIMOS-native format so that the response can distinguish full
         # audit vs limited analysis.
         if settings.validate_file_extension:
             ext_valid, ext_error = validate_file_extension(filename)
@@ -439,14 +439,14 @@ class ChunkedUploadService:
             # Annotate verification mode for chunked uploads based on the
             # original filename extension.
             if session.supported_format:
-                verification_mode = "Full PASS97 Audit"
+                verification_mode = "Full RIMOS Audit"
                 verification_mode_key = "full"
                 verification_mode_reason = None
             else:
                 verification_mode = "Limited Analysis"
                 verification_mode_key = "limited"
                 verification_mode_reason = (
-                    "File type not in PASS97-native formats (.lm3z, .rim0, .rim95, .safetensors, "
+                    "File type not in RIMOS-native formats (.lm3z, .rim0, .rim95, .safetensors, "
                     ".bin, .gguf, .pt, .pth, .ckpt, .onnx); "
                     "RIM-OS metrics computed, but format-specific semantics may be unavailable."
                 )
@@ -520,7 +520,7 @@ class ChunkedUploadService:
                 "artifact_block": artifact_block,
                 "metadata": {
                     "name": f"Audit Report: {session.filename}",
-                    "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
+                    "description": "Cryptographic audit artifact verified by RIMOS pipeline.",
                     "attributes": [
                         {"trait_type": "Audit Score", "value": audit_score},
                         {"trait_type": "Status", "value": status_str}

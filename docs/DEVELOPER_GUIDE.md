@@ -1,4 +1,4 @@
-# Pass97 - Developer Guide
+# RIMOS - Developer Guide
 
 > A simple explanation of how this project works, for developers.
 
@@ -6,7 +6,7 @@
 
 ## What Is This Project?
 
-**Pass97** is a system that **reviews binary files** (like AI model weights: `.lm3z`, `.rim0`, `.rim95`) and produces:
+**RIMOS** is a system that **reviews binary files** (like AI model weights: `.lm3z`, `.rim0`, `.rim95`) and produces:
 
 1. **Integrity score** (0–100)
 2. **Risk level** (LOW / MEDIUM / HIGH)

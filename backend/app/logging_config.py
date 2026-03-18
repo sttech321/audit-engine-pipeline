@@ -11,7 +11,7 @@ def setup_logging() -> logging.Logger:
     settings = get_settings()
     
     # Create logger
-    logger = logging.getLogger("pass97")
+    logger = logging.getLogger("RIMOS")
     logger.setLevel(getattr(logging, settings.log_level.upper()))
     
     # Avoid duplicate handlers

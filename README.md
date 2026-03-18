@@ -1,10 +1,10 @@
-# PASS97
+# RIMOS
 
-PASS97 is a system that maps AI artifacts onto a mathematical Penrose space and stores their positions in an internal blockchain.
+RIMOS is a system that maps AI artifacts onto a mathematical Penrose space and stores their positions in an internal blockchain.
 
 ## One-Sentence Explanation
 
-PASS97 takes an uploaded artifact, runs it through a deterministic mathematical pipeline, calculates its position on a Penrose map, and writes that position into a blockchain.
+RIMOS takes an uploaded artifact, runs it through a deterministic mathematical pipeline, calculates its position on a Penrose map, and writes that position into a blockchain.
 
 ## What The System Does
 
@@ -73,7 +73,7 @@ Without anchors, positions would exist but would not have a stable frame of refe
 
 ## Artifact Processing
 
-When a file is uploaded, PASS97 runs a deterministic mathematical pipeline:
+When a file is uploaded, RIMOS runs a deterministic mathematical pipeline:
 
 ```text
 Binary Data
@@ -222,7 +222,7 @@ artifact -> map position -> blockchain block
 
 ## Supported Artifact Formats
 
-The backend currently accepts these PASS97-native artifact extensions:
+The backend currently accepts these RIMOS-native artifact extensions:
 
 - `.lm3z`
 - `.rim0`
@@ -232,7 +232,7 @@ The backend currently accepts these PASS97-native artifact extensions:
 ## Repository Layout
 
 ```text
-pass97/
+RIMOS/
 |-- backend/
 |   |-- app/
 |   |   |-- config.py

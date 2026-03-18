@@ -1,7 +1,7 @@
 """
 Worker executor service with ProcessPoolExecutor for CPU-bound audit tasks.
 
-PASS97 Spec Compliant:
+RIMOS Spec Compliant:
 - Worker processes (not threads) for isolation
 - Configurable worker timeout
 - Memory isolation between audits
@@ -68,7 +68,7 @@ async def execute_in_worker(
     """
     Execute a function in a worker process with timeout.
     
-    PASS97 Spec Compliant:
+    RIMOS Spec Compliant:
     - Uses ProcessPoolExecutor (not threads)
     - Configurable timeout via settings
     - Raises TimeoutError on timeout

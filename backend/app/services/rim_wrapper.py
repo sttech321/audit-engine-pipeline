@@ -118,7 +118,7 @@ def extract_kpis_from_report(report: Dict[str, Any]) -> Dict[str, Any]:
     Extract high-level KPIs from a raw RIM-OS audit report.
 
     This helper provides a stable, backend-facing mapping from the client's
-    canonical report structure into the subset of fields required by PASS97:
+    canonical report structure into the subset of fields required by RIMOS:
 
         - integrity_score_0_100 → audit_score
         - risk_level            → risk

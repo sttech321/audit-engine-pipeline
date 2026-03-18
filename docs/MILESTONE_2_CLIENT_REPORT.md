@@ -1,6 +1,6 @@
 # Milestone 2 Client Report
 
-**Project:** Pass97  
+**Project:** RIMOS  
 **Milestone:** Milestone 2 - Frontend Audit Dashboard & UI  
 **Date:** March 11, 2026
 

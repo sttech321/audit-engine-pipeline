@@ -62,7 +62,7 @@
   "uploadId": "0b1bad32-eb53-4e64-b518-2e343e38d018",
   "metadata": {
     "name": "Audit Report: bad_signature_test.rim95",
-    "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
+    "description": "Cryptographic audit artifact verified by RIMOS pipeline.",
     "attributes": [
       {
         "trait_type": "Audit Score",

@@ -1,7 +1,7 @@
 """
 SVG Penrose P3 tiling visualization service.
 
-PASS97 Spec Compliant:
+RIMOS Spec Compliant:
 - True Penrose P3 inflation from star seed (5 thick rhombi)
 - Mathematically correct thin (36°/144°) and thick (72°/108°) geometry
 - Deterministic fingerprint from audit parameters

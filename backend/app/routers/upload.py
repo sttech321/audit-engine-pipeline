@@ -75,7 +75,7 @@ async def upload_audit_file(
     """
     Upload and process an audit artifact file.
     
-    This endpoint accepts PASS97-native artifact extensions:
+    This endpoint accepts RIMOS-native artifact extensions:
     .lm3z, .rim0, .rim95, .safetensors, .bin, .gguf, .pt, .pth, .ckpt, and .onnx.
     
     New additive features (all backward compatible):
@@ -328,7 +328,7 @@ async def upload_audit_file(
                 description="Penrose details are now handled solely inside RIM-OS",
             ),
         ]
-        # Map RIM-OS risk_level back to legacy PASS97-style status strings.
+        # Map RIM-OS risk_level back to legacy RIMOS-style status strings.
         if risk_level == "LOW":
             status_str = "Verified"
         elif risk_level == "MEDIUM":
@@ -427,21 +427,21 @@ async def upload_audit_file(
         # ─── Build Response (Unchanged Schema) ───────────────────────────────
         # Verification mode annotation for report/dashboard consumers.
         if is_supported_format:
-            verification_mode = "Full PASS97 Audit"
+            verification_mode = "Full RIMOS Audit"
             verification_mode_key = "full"
             verification_mode_reason = None
         else:
             verification_mode = "Limited Analysis"
             verification_mode_key = "limited"
             verification_mode_reason = (
-                "File type not in PASS97-native formats (.lm3z, .rim0, .rim95, .safetensors, "
+                "File type not in RIMOS-native formats (.lm3z, .rim0, .rim95, .safetensors, "
                 ".bin, .gguf, .pt, .pth, .ckpt, .onnx); "
                 "RIM-OS metrics computed, but format-specific semantics may be unavailable."
             )
 
         response_metadata = {
             "name": f"Audit Report: {file.filename}",
-            "description": "Cryptographic audit artifact verified by Pass97 pipeline.",
+            "description": "Cryptographic audit artifact verified by RIMOS pipeline.",
             "attributes": [
                 {"trait_type": "Audit Score", "value": dynamic_score},
                 {"trait_type": "Status", "value": dynamic_status}

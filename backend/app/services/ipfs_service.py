@@ -11,8 +11,8 @@ def prepare_ipfs_metadata(upload_id: str, file_hash: str, user_metadata: dict) -
     
     return {
         "url": mock_ipfs_url,
-        "name": user_metadata.get("name", "Pass97 Audit NFT"),
-        "symbol": "PASS97",
+        "name": user_metadata.get("name", "RIMOS Audit NFT"),
+        "symbol": "RIMOS",
         "description": user_metadata.get("description", f"Cryptographic audit artifact {file_hash}"),
         "attributes": user_metadata.get("attributes", [])
     }

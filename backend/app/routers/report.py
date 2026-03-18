@@ -1,7 +1,7 @@
 """
 Report generation router.
 
-PASS97 Spec Compliant:
+RIMOS Spec Compliant:
 - PDF report download endpoint
 - SVG visualization endpoint
 - Extended audit results with full output contract
@@ -154,7 +154,7 @@ async def download_pdf_report(upload_id: str):
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="pass97_report_{upload_id}.pdf"'
+                "Content-Disposition": f'attachment; filename="RIMOS_report_{upload_id}.pdf"'
             }
         )
     except Exception as e:
@@ -262,7 +262,7 @@ async def get_penrose_svg(
 @router.get("/report/{upload_id}/extended")
 async def get_extended_result(upload_id: str):
     """
-    Get the full extended audit result with all PASS97 fields.
+    Get the full extended audit result with all RIMOS fields.
     
     Args:
         upload_id: The upload ID from the audit response

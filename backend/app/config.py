@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     # All new features are opt-out configurable
     
     # File validation features
-    validate_file_extension: bool = True  # Enforce supported PASS97 artifact extensions
+    validate_file_extension: bool = True  # Enforce supported RIMOS artifact extensions
     validate_mime_type: bool = True  # Validate MIME types
     use_streaming_upload: bool = True  # Use memory-efficient streaming
     

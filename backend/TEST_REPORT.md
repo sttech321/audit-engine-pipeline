@@ -1,4 +1,4 @@
-# PASS97 Audit Pipeline - Test Coverage Report
+# RIMOS Audit Pipeline - Test Coverage Report
 
 **Report Date:** March 2, 2026  
 **Total Tests:** 212  
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The PASS97 backend audit pipeline has comprehensive test coverage across all major components. All 212 automated tests pass successfully, demonstrating a robust and production-ready system.
+The RIMOS backend audit pipeline has comprehensive test coverage across all major components. All 212 automated tests pass successfully, demonstrating a robust and production-ready system.
 
 ---
 
@@ -21,7 +21,7 @@ The PASS97 backend audit pipeline has comprehensive test coverage across all maj
 | SHA-256 Hashing | 14 | ✅ PASS | 100% |
 | Metadata Parsing | 22 | ✅ PASS | 100% |
 | NFT Mint Endpoints | 7 | ✅ PASS | 100% |
-| PASS97 Compliance | 33 | ✅ PASS | 100% |
+| RIMOS Compliance | 33 | ✅ PASS | 100% |
 | Audit Pipeline | 11 | ✅ PASS | 100% |
 | Rate Limiting & Abuse Protection | 20 | ✅ PASS | 100% |
 | Regression Tests | 33 | ✅ PASS | 100% |
@@ -34,7 +34,7 @@ The PASS97 backend audit pipeline has comprehensive test coverage across all maj
 
 ## 1. Canonical RIM-OS v2 Audit Engine
 
-The legacy PASS97 5-stage mathematical pipeline has been replaced by the
+The legacy RIMOS 5-stage mathematical pipeline has been replaced by the
 canonical RIM-OS v2 engine. All low-level mathematical operations now live
 exclusively in `rim_os_v2.py`, and the backend treats that module as an
 immutable dependency.
@@ -240,7 +240,7 @@ immutable dependency.
 
 ---
 
-## 9. PASS97 Compliance Features
+## 9. RIMOS Compliance Features
 
 ### Ledger Chaining
 
@@ -343,10 +343,10 @@ and `report["integrity"]`.
 
 ## Conclusion
 
-The PASS97 audit pipeline has **complete test coverage** across all critical components:
+The RIMOS audit pipeline has **complete test coverage** across all critical components:
 
 ✅ **100% pass rate** (212/212 tests)  
-✅ **Full PASS97 specification compliance** (§2.1-2.5)  
+✅ **Full RIMOS specification compliance** (§2.1-2.5)  
 ✅ **Cryptographic security** (Ed25519, SHA-256)  
 ✅ **Robust input validation** (format, extension, size, MIME)  
 ✅ **Abuse protection** (rate limiting, deduplication, replay detection)  

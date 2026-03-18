@@ -1,5 +1,5 @@
 """
-Comprehensive upload edge case tests for the PASS97 audit pipeline.
+Comprehensive upload edge case tests for the RIMOS audit pipeline.
 Tests all 3 outcome states: Verified, Verified with Warnings, Verification Failed.
 Also tests determinism, empty files, large files, and file type validation.
 """

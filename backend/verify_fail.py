@@ -2,7 +2,7 @@ import httpx
 
 r = httpx.post(
     "http://localhost:8000/api/upload",
-    files={"file": open("d:/wamp64/www/pass97/bad_signature.rim95", "rb")}
+    files={"file": open("d:/wamp64/www/RIMOS/bad_signature.rim95", "rb")}
 )
 data = r.json()
 v = data["verification"]

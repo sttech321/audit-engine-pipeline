@@ -294,7 +294,7 @@ export default function UploadPage() {
             <div className="flex items-center gap-3">
               <Shield className="h-7 w-7 text-amber-300" />
               <h1 className="text-lg font-semibold tracking-[0.16em] text-slate-100 uppercase">
-                Pass97
+                RIMOS
               </h1>
             </div>
             <div className="w-28" />
@@ -312,13 +312,13 @@ export default function UploadPage() {
                   Upload Artifact
                 </h2>
                 <p className="mt-3 text-base text-slate-400 leading-7">
-                  Pass97 maps your artifact into a mathematical landscape —
+                  RIMOS maps your artifact into a mathematical landscape —
                   revealing its spectral structure, geometric position, and
                   verification summary.
                 </p>
                 <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/8 px-4 py-2 text-xs font-semibold text-emerald-300 tracking-wide">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  Deterministic PASS97 mapping pipeline
+                  Deterministic RIMOS mapping pipeline
                 </div>
               </div>
 
@@ -418,7 +418,7 @@ export default function UploadPage() {
                   </h2>
                   <p className="text-sm text-slate-400 mt-1">
                     Your artifact has been resolved into a deterministic
-                    position in the PASS97 mathematical landscape.
+                    position in the RIMOS mathematical landscape.
                   </p>
                 </div>
                 <div className="flex flex-col items-start md:items-end gap-2">
@@ -443,7 +443,7 @@ export default function UploadPage() {
                   </div>
                   <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/8 px-3 py-1.5 text-xs font-semibold text-emerald-300">
                     <ShieldCheck className="w-3 h-3" />
-                    PASS97 deterministic engine
+                    RIMOS deterministic engine
                   </div>
                 </div>
               </div>
@@ -598,7 +598,7 @@ export default function UploadPage() {
                 </Link>
                 <a
                   href={`${API_URL}/api/report/${uploadData.uploadId}/pdf`}
-                  download={`pass97_report_${uploadData.uploadId}.pdf`}
+                  download={`RIMOS_report_${uploadData.uploadId}.pdf`}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl glass-sky text-sky-200 text-sm font-semibold transition hover:bg-sky-300/20"
                 >
                   <Download className="w-4 h-4" />

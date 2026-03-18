@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pass97 | A Mathematical Journey Through Space",
-  description: "Pass97 maps binary artifacts into spectral structure and Penrose geometry, presenting the current verification pipeline through a deep-space mathematical narrative.",
+  title: "RIMOS | A Mathematical Journey Through Space",
+  description: "RIMOS maps binary artifacts into spectral structure and Penrose geometry, presenting the current verification pipeline through a deep-space mathematical narrative.",
 };
 
 export default function RootLayout({

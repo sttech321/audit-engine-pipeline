@@ -319,7 +319,7 @@ export default function ReportPage() {
           <div className="flex items-center gap-3">
             <Shield className="h-7 w-7 text-amber-300" />
             <span className="text-lg font-semibold tracking-[0.16em] text-slate-100 uppercase">
-              Pass97
+              RIMOS
             </span>
           </div>
           <div className="text-right">
@@ -434,7 +434,7 @@ export default function ReportPage() {
           <div className="space-y-8">
             <Section
               title="Artifact Map Position"
-              description="The existing PASS97 pipeline exposes this artifact as a coordinate on the Penrose map."
+              description="The existing RIMOS pipeline exposes this artifact as a coordinate on the Penrose map."
             >
               {report.map_position ? (
                 <div className="space-y-5">

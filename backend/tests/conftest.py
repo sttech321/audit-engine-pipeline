@@ -1,5 +1,5 @@
 """
-Pytest configuration and fixtures for PASS97 backend tests.
+Pytest configuration and fixtures for RIMOS backend tests.
 """
 import hashlib
 import json

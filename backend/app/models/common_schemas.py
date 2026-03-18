@@ -26,10 +26,10 @@ class VerificationStatus(BaseModel):
     checks: list[str]
 
 
-# ─── PASS97 Extended Output Schemas ──────────────────────────────────────────
+# ─── RIMOS Extended Output Schemas ──────────────────────────────────────────
 
 class RiskLevel(str, Enum):
-    """Risk classification levels per PASS97 spec."""
+    """Risk classification levels per RIMOS spec."""
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -60,7 +60,7 @@ class Anomaly(BaseModel):
 
 class RiskBadge(BaseModel):
     """
-    Risk assessment badge per PASS97 spec.
+    Risk assessment badge per RIMOS spec.
     
     Provides a visual indicator of audit risk level.
     """
@@ -114,7 +114,7 @@ class EUAIActCompliance(BaseModel):
     """
     EU AI Act compliance assessment.
     
-    PASS97 Spec: Provides mapping to EU AI Act risk categories
+    RIMOS Spec: Provides mapping to EU AI Act risk categories
     based on audit results. This is informational only.
     """
     category: EUAIActCategory
@@ -125,7 +125,7 @@ class EUAIActCompliance(BaseModel):
     
     @classmethod
     def from_risk_badge(cls, risk_badge: RiskBadge) -> "EUAIActCompliance":
-        """Map PASS97 risk to EU AI Act category (informational)."""
+        """Map RIMOS risk to EU AI Act category (informational)."""
         if risk_badge.level == RiskLevel.CRITICAL:
             return cls(
                 category=EUAIActCategory.HIGH_RISK,
@@ -197,7 +197,7 @@ class ArtifactBlock(BaseModel):
 
 class LegalDisclosures(BaseModel):
     """
-    Legal scope disclosures per PASS97 spec.
+    Legal scope disclosures per RIMOS spec.
     
     Required disclosures about audit limitations.
     """
@@ -208,11 +208,11 @@ class LegalDisclosures(BaseModel):
     
     @classmethod
     def default(cls) -> "LegalDisclosures":
-        """Return standard PASS97 legal disclosures."""
+        """Return standard RIMOS legal disclosures."""
         return cls(
             weight_space_scope=(
                 "This audit evaluates static model weight artifacts only. "
-                "The PASS97 pipeline examines cryptographic properties, structural "
+                "The RIMOS pipeline examines cryptographic properties, structural "
                 "integrity, and provenance markers within the serialized weight files. "
                 "No inference, runtime behavior, or training data analysis is performed."
             ),
@@ -227,13 +227,13 @@ class LegalDisclosures(BaseModel):
                 "Bias and fairness metrics (requires inference)",
                 "Environmental and compute efficiency metrics"
             ],
-            version="PASS97-v1.0-2026"
+            version="RIMOS-v1.0-2026"
         )
 
 
 class ExtendedAuditResult(BaseModel):
     """
-    Extended audit result with all PASS97 spec fields.
+    Extended audit result with all RIMOS spec fields.
     
     This is the full output contract including:
     - Anomalies list
@@ -247,7 +247,7 @@ class ExtendedAuditResult(BaseModel):
     verification: VerificationStatus
     file_hash: str
     
-    # Extended PASS97 fields
+    # Extended RIMOS fields
     anomalies: List[Anomaly]
     risk_badge: RiskBadge
     eu_ai_act: EUAIActCompliance

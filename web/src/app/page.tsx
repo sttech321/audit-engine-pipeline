@@ -240,7 +240,7 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-xl font-semibold tracking-[0.18em] text-slate-100 uppercase">
-                  Pass97
+                  RIMOS
                 </h1>
                 <p className="text-[10px] tracking-[0.3em] text-slate-500 uppercase">
                   Audit Engine Pipeline
@@ -520,7 +520,7 @@ export default function Home() {
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2 text-slate-500 text-sm">
               <Shield className="h-4 w-4 text-amber-300/60" />
-              <span>Pass97 · Audit Engine Pipeline</span>
+              <span>RIMOS · Audit Engine Pipeline</span>
             </div>
             <div className="flex items-center gap-2 text-slate-600 text-xs font-mono">
               <FlaskConical className="h-3.5 w-3.5 text-violet-400/60" />

@@ -1,5 +1,5 @@
 """
-Legacy root-level upload tests kept compatible with the current PASS97 API.
+Legacy root-level upload tests kept compatible with the current RIMOS API.
 
 These mirror the maintained expectations from backend/tests/ while preserving
 the ability to run `python -m pytest` from the repository root.

@@ -148,7 +148,7 @@ export const KPIDisplay: FC<KPIDisplayProps> = ({
                 >
                   {metadata.verification_mode === "limited"
                     ? "Limited Analysis"
-                    : "Full PASS97 Audit"}
+                    : "Full RIMOS Audit"}
                 </span>
               )}
               <span className="ml-auto text-sm font-semibold text-slate-300">
