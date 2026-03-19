@@ -11,6 +11,8 @@ from app.models.metadata_schemas import (
     MetadataParseResult,
 )
 from app.models.mint_schemas import (
+    IpfsUploadRequest,
+    IpfsUploadResponse,
     MintFinalizeRequest,
     MintPrepareRequest,
     MintPrepareResponse,
@@ -26,6 +28,8 @@ __all__ = [
     "VerificationStatus",
     "UploadResponse",
     # Mint schemas
+    "IpfsUploadRequest",
+    "IpfsUploadResponse",
     "MintPrepareRequest",
     "NFTMetadata",
     "PreparedMetadata",

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_config import logger
-from app.routers import mint, upload, report, chunked_upload
+from app.routers import chunked_upload, ipfs, mint, report, upload
 from app.services.abuse_protection import setup_rate_limiter
 from app.services.worker_executor import shutdown_executor
 
@@ -55,6 +55,7 @@ if settings.enable_rate_limiting:
 
 app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(chunked_upload.router, prefix="/api", tags=["chunked-upload"])
+app.include_router(ipfs.router, prefix="/api/ipfs", tags=["ipfs"])
 app.include_router(mint.router, prefix="/api/mint", tags=["mint"])
 app.include_router(report.router, prefix="/api", tags=["report"])
 

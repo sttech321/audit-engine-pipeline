@@ -88,6 +88,13 @@ class Settings(BaseSettings):
     use_structured_errors: bool = True  # Use structured error envelope
     hide_internal_errors: bool = True  # Prevent internal error leakage
 
+    # Optional NFT/IPFS integration (non-blocking layer)
+    ipfs_provider: str = "auto"  # auto | pinata | nft_storage
+    pinata_jwt: str = ""
+    pinata_api_key: str = ""
+    pinata_api_secret: str = ""
+    nft_storage_token: str = ""
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug_flag(cls, value):

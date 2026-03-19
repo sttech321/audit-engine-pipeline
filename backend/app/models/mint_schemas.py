@@ -21,6 +21,8 @@ class MintPrepareRequest(BaseModel):
     metadata: dict[str, Any]
     walletAddress: str
     fileHash: str
+    auditData: dict[str, Any] | None = None
+    metadataUrl: str | None = None
 
     @field_validator("walletAddress")
     @classmethod
@@ -51,12 +53,44 @@ class NFTMetadata(BaseModel):
 
 class PreparedMetadata(BaseModel):
     url: str
+    provider: str | None = None
+    fallbackUsed: bool = False
 
 
 class MintPrepareResponse(BaseModel):
     metadata: PreparedMetadata
     mintHash: str
     nftMetadata: NFTMetadata
+
+
+class IpfsUploadRequest(BaseModel):
+    uploadId: str
+    fileHash: str
+    metadata: dict[str, Any]
+    auditData: dict[str, Any] | None = None
+
+    @field_validator("uploadId")
+    @classmethod
+    def validate_upload_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("uploadId cannot be empty")
+        return v
+
+    @field_validator("fileHash")
+    @classmethod
+    def validate_file_hash(cls, v: str) -> str:
+        if not v or len(v) != 64:
+            raise ValueError("fileHash must be a 64-character SHA-256 hex string")
+        if not re.match(r"^[a-fA-F0-9]{64}$", v):
+            raise ValueError("fileHash must be a valid hex string")
+        return v.lower()
+
+
+class IpfsUploadResponse(BaseModel):
+    url: str
+    cid: str
+    provider: str | None = None
+    fallbackUsed: bool = False
 
 
 class MintFinalizeRequest(BaseModel):

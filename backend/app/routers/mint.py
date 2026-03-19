@@ -19,9 +19,23 @@ router = APIRouter()
 async def prepare_mint(request: MintPrepareRequest):
     try:
         logger.info(f"Preparing mint for upload {request.uploadId}")
-        
-        # Prepare IPFS metadata deterministically
-        ipfs_data = prepare_ipfs_metadata(request.uploadId, request.fileHash, request.metadata)
+
+        if request.metadataUrl:
+            ipfs_data = {
+                "url": request.metadataUrl,
+                "name": request.metadata.get("name", "RIMOS Audit NFT"),
+                "symbol": request.metadata.get("symbol", "RIMOS"),
+                "provider": "custom",
+                "fallbackUsed": False,
+            }
+        else:
+            # Prepare IPFS metadata (real provider first, fallback if needed)
+            ipfs_data = prepare_ipfs_metadata(
+                request.uploadId,
+                request.fileHash,
+                request.metadata,
+                request.auditData,
+            )
         
         # Create a deterministic mock hash based on input (incorporating actual file cryptographic hash)
         hash_input = f"{request.uploadId}{request.walletAddress}{request.fileHash}".encode()
@@ -30,7 +44,11 @@ async def prepare_mint(request: MintPrepareRequest):
         logger.info(f"Mint prepared successfully: {mint_hash[:16]}...")
         
         return MintPrepareResponse(
-            metadata=PreparedMetadata(url=ipfs_data["url"]),
+            metadata=PreparedMetadata(
+                url=ipfs_data["url"],
+                provider=ipfs_data.get("provider"),
+                fallbackUsed=bool(ipfs_data.get("fallbackUsed", False)),
+            ),
             mintHash=mint_hash,
             nftMetadata=NFTMetadata(
                 name=ipfs_data["name"],

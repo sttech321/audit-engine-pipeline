@@ -59,6 +59,22 @@ def test_prepare_mint_empty_upload_id():
     assert response.status_code == 422
 
 
+def test_prepare_mint_with_explicit_metadata_url():
+    """Prepare should accept explicit metadata URL from upstream IPFS upload."""
+    response = client.post("/api/mint/prepare", json={
+        "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+        "metadata": {"name": "Test NFT", "symbol": "RIMOS"},
+        "walletAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "fileHash": "a" * 64,
+        "metadataUrl": "https://gateway.pinata.cloud/ipfs/QmTestCid"
+    })
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["metadata"]["url"] == "https://gateway.pinata.cloud/ipfs/QmTestCid"
+    assert payload["metadata"]["fallbackUsed"] is False
+    assert payload["metadata"]["provider"] == "custom"
+
+
 # ─── MINT FINALIZE TESTS ─────────────────────────────────────────────────────
 
 def test_finalize_mint_valid():
@@ -90,3 +106,17 @@ def test_finalize_mint_short_signature():
         "signature": "short"
     })
     assert response.status_code == 422
+
+
+def test_ipfs_upload_endpoint_returns_payload():
+    """IPFS upload endpoint should return URL + CID (provider or fallback)."""
+    response = client.post("/api/ipfs/upload", json={
+        "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+        "metadata": {"name": "Test NFT", "description": "Test description"},
+        "fileHash": "a" * 64
+    })
+    assert response.status_code == 200
+    payload = response.json()
+    assert "url" in payload
+    assert "cid" in payload
+    assert "fallbackUsed" in payload
