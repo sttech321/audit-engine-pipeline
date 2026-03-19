@@ -27,6 +27,8 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const BASE = `${API_URL}/api`;
+const NFT_ENABLED =
+  (process.env.NEXT_PUBLIC_ENABLE_NFT || process.env.ENABLE_NFT || "false").toLowerCase() === "true";
 const MAX_FILE_SIZE_BYTES = Number(
   process.env.NEXT_PUBLIC_MAX_FILE_SIZE_BYTES || 10 * 1024 * 1024 * 1024,
 );
@@ -615,20 +617,20 @@ export default function UploadPage() {
               </div>
             </div>
 
-            {/* Mint flow */}
-            <div className="rounded-[2rem] glass p-10 shadow-2xl shadow-black/40">
-              <div className="mb-6">
-                <h3 className="text-2xl font-semibold text-white">
-                  Optional Provenance Certificate
-                </h3>
-                <p className="mt-2 text-sm leading-7 text-slate-400">
-                  NFT minting is optional. It acts as a certificate for this
-                  mapped artifact position and does not define the position
-                  itself.
-                </p>
+            {NFT_ENABLED && (
+              <div className="rounded-[2rem] glass p-10 shadow-2xl shadow-black/40">
+                <div className="mb-6">
+                  <h3 className="text-2xl font-semibold text-white">
+                    Optional Provenance Certificate
+                  </h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-400">
+                    NFT minting is optional. It acts as an additional certificate
+                    layer and does not change the core audit or report output.
+                  </p>
+                </div>
+                <MintFlow uploadData={uploadData} />
               </div>
-              {/* <MintFlow uploadData={uploadData} /> */}
-            </div>
+            )}
 
             <div className="text-center">
               <button

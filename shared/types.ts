@@ -45,9 +45,16 @@ export interface UploadResponse {
 }
 
 export interface MintPrepareResponse {
-  metadata: { url: string };
+  metadata: { url: string; provider?: string | null; fallbackUsed?: boolean };
   mintHash: string;
   nftMetadata: { name: string; symbol: string };
+}
+
+export interface IpfsUploadResponse {
+  url: string;
+  cid: string;
+  provider?: string | null;
+  fallbackUsed?: boolean;
 }
 
 export interface RiskBadge {
