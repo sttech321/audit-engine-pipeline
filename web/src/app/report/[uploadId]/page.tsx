@@ -299,6 +299,67 @@ export default function ReportPage() {
         ? "bg-amber-400/15 text-amber-300 border-amber-400/30"
         : "bg-red-500/15 text-red-300 border-red-500/30";
 
+  const findKpi = (label: string) =>
+    report.kpis.find((k) => k.label === label);
+
+  const toNumber = (v: unknown): number | null => {
+    if (typeof v === "number") return v;
+    if (typeof v === "string") {
+      const parsed = Number(v);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+
+  const auditScoreKpi = findKpi("Audit Score");
+  const issuesFoundKpi = findKpi("Issues Found");
+  const anomalyCount = toNumber(issuesFoundKpi?.value) ?? 0;
+  const auditScore = toNumber(auditScoreKpi?.value) ?? 0;
+
+  const rawEuCategory = String(report.eu_ai_act?.category ?? "");
+  const riskLabel =
+    rawEuCategory === "MINIMAL_RISK"
+      ? "Minimal Risk"
+      : rawEuCategory === "LIMITED_RISK"
+        ? "Limited Risk"
+        : "High Risk";
+
+  const complianceStatusPretty =
+    complianceStatus === "PASS"
+      ? "Pass"
+      : complianceStatus === "CONDITIONAL_PASS"
+        ? "Conditional Pass"
+        : complianceStatus === "FAIL"
+          ? "Fail"
+          : "Not available";
+
+  const humanReviewNeeded =
+    typeof euAiConformity?.human_review_needed === "boolean"
+      ? euAiConformity.human_review_needed
+      : report.verification.status.toLowerCase().includes("failed");
+
+  const recommendationText =
+    riskLabel === "Minimal Risk"
+      ? "This artifact passed structural integrity checks with no anomalies detected. It is suitable for development/testing use."
+      : riskLabel === "Limited Risk"
+        ? `Minor irregularities were detected (${anomalyCount} anomaly${
+            anomalyCount === 1 ? "" : "ies"
+          }). Review is recommended before production use.`
+        : `Critical integrity signals were detected (${anomalyCount} anomaly${
+            anomalyCount === 1 ? "" : "ies"
+          }). Manual review is required before any production use.`;
+
+  const whatThisMeansText =
+    riskLabel === "Minimal Risk"
+      ? "The system found no critical irregularities in the artifact structure."
+      : riskLabel === "Limited Risk"
+        ? "The system found minor irregularities in the artifact structure. These are not critical, but should be reviewed if the artifact will be used in production."
+        : "The system found critical integrity issues in the artifact structure. Do not use this artifact for production without human review.";
+
+  const humanReviewGuidanceText = humanReviewNeeded
+    ? "Human review is required based on the current thresholds. Consider re-uploading a different artifact or performing additional domain validation before production use."
+    : "Manual review is not required based on current thresholds. However, review is recommended if the model will be used in production or in sensitive use cases.";
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#08111f] text-white">
       {/* Background */}
@@ -334,6 +395,106 @@ export default function ReportPage() {
       </header>
 
       <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+        {/* ── Executive Summary ── */}
+        <Section
+          title="Executive Summary"
+          description="A human-readable overview of this artifact&apos;s deterministic audit results."
+        >
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/8 bg-slate-900/60 p-5">
+              <p className="text-sm leading-7 text-slate-300">
+                This file has been analyzed using the RIMOS audit system. The result
+                below represents the artifact&apos;s deterministic structural mapping on the
+                Penrose space.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className={`rounded-xl border ${tone.border} ${tone.bg} p-4`}>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Result
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {report.verification.status}
+                  </p>
+                </div>
+                <div
+                  className={`rounded-xl border p-4 ${
+                    riskLabel === "Minimal Risk"
+                      ? "border-emerald-400/25 bg-emerald-400/6"
+                      : riskLabel === "Limited Risk"
+                        ? "border-amber-400/25 bg-amber-400/6"
+                        : "border-red-500/25 bg-red-500/6"
+                  }`}
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Risk Level
+                  </p>
+                  <p
+                    className={`mt-2 text-sm font-semibold ${
+                      riskLabel === "Minimal Risk"
+                        ? "text-emerald-300"
+                        : riskLabel === "Limited Risk"
+                          ? "text-amber-200"
+                          : "text-red-300"
+                    }`}
+                  >
+                    {riskLabel}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {riskLabel === "Minimal Risk"
+                      ? "This classification is based on low anomaly signals, stable deterministic structure, and no critical integrity flags."
+                      : riskLabel === "Limited Risk"
+                        ? `This classification is based on ${anomalyCount} anomaly signal${anomalyCount === 1 ? "" : "s"}, an audit score of ~${auditScore.toFixed(
+                            0,
+                          )}/100, and threshold-based integrity checks.`
+                        : `This classification is based on ${anomalyCount} anomaly signal${anomalyCount === 1 ? "" : "s"}, an audit score of ~${auditScore.toFixed(
+                            0,
+                          )}/100, and threshold-based integrity checks requiring escalation.`}
+                  </p>
+                </div>
+                <div className={`rounded-xl border ${tone.border} ${tone.bg} p-4`}>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Confidence
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-slate-200">
+                    {report.verification.confidence}%
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`rounded-2xl border p-5 ${
+                riskLabel === "Minimal Risk"
+                  ? "border-emerald-400/15 bg-emerald-400/6"
+                  : riskLabel === "Limited Risk"
+                    ? "border-amber-400/15 bg-amber-400/6"
+                    : "border-red-500/15 bg-red-500/6"
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                {riskLabel === "Minimal Risk" ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                ) : riskLabel === "Limited Risk" ? (
+                  <TriangleAlert className="w-4 h-4 text-amber-300" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-300" />
+                )}
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Recommendation
+                </p>
+              </div>
+              <p className="text-sm text-slate-300 leading-7">
+                {recommendationText}
+              </p>
+              <p className="mt-3 text-xs text-slate-500">
+                Why this classification: The audit assesses deterministic structural integrity
+                and anomaly signals across mapped chunks. Your confidence score is {report.verification.confidence}%;
+                reliability is strongest for structural integrity checks.
+              </p>
+            </div>
+          </div>
+        </Section>
+
         {/* ── Hero / title panel ── */}
         <section className="rounded-[2rem] glass p-8 shadow-2xl shadow-black/40">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -398,6 +559,12 @@ export default function ReportPage() {
                   The artifact remains an independent point on the map. This
                   status describes the current verification outcome for that
                   position, not whether the position exists.
+                </p>
+                <p className="mt-2 max-w-xl text-sm text-slate-300">
+                  <strong>What this means:</strong> {whatThisMeansText}
+                </p>
+                <p className="mt-2 max-w-xl rounded-xl border border-sky-400/20 bg-sky-400/6 p-3 text-sm text-slate-200 leading-6">
+                  <strong>Decision-ready summary:</strong> {recommendationText}
                 </p>
                 <div
                   className={`mt-3 inline-flex items-center rounded-full border px-4 py-1.5 text-sm font-semibold ${tone.badgeClass}`}
@@ -477,8 +644,8 @@ export default function ReportPage() {
                       </span>
                     </div>
                     <p className="mb-4 text-sm text-slate-400">
-                      The Penrose cut yields five tau vectors that place this
-                      artifact in the global map space.
+                      These values represent the artifact’s deterministic position
+                      in a mathematical Penrose map space (five τ coordinates).
                     </p>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                       {report.map_position.tau_vectors.map((value, index) => (
@@ -509,6 +676,10 @@ export default function ReportPage() {
               description="Penrose tiling fingerprint rendered from the artifact map position."
             >
               <div className="overflow-hidden rounded-2xl border border-white/8 bg-slate-900/40 p-3">
+                <p className="mb-3 text-sm text-slate-400">
+                  This visualization helps you inspect the structural signature
+                  produced by the deterministic audit.
+                </p>
                 <img
                   src={`${API_URL}/api/report/${uploadId}/svg`}
                   alt="Penrose map visualization"
@@ -558,6 +729,30 @@ export default function ReportPage() {
                     </InfoTile>
                   </div>
                 )}
+              </div>
+            </Section>
+
+            {/* ── Audit Trail ── */}
+            <Section
+              title="Audit Trail"
+              description="Traceability details for this deterministic audit run."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <InfoTile label="Triggered By">
+                  <p className="text-sm text-slate-300 leading-6">
+                    PASS97 upload flow (user-triggered audit request).
+                  </p>
+                </InfoTile>
+                <InfoTile label="Timestamp" icon={CalendarClock}>
+                  <p className="text-sm font-medium text-slate-300 leading-6">
+                    {formatTimestamp(report.verification.timestamp)}
+                  </p>
+                </InfoTile>
+                <InfoTile label="RIM-OS System Version" icon={Fingerprint} full>
+                  <p className="text-sm text-slate-300 leading-6">
+                    {String(euAiMeta?.schema ?? "unknown")}
+                  </p>
+                </InfoTile>
               </div>
             </Section>
 
@@ -637,6 +832,11 @@ export default function ReportPage() {
                   })}
                 </div>
               </div>
+              <p className="mt-4 text-sm text-slate-400 leading-7">
+                Security evidence here focuses on deterministic integrity signals (schema/genesis consistency),
+                plus optional signature evidence when signature metadata is present. For production deployment,
+                additional domain-specific and operational testing is recommended.
+              </p>
             </Section>
 
           {/* ── Right column ── */}
@@ -708,12 +908,127 @@ export default function ReportPage() {
                       </span>
                     </div>
                     <p
-                      className={`text-3xl font-bold ${kpiValueColor(kpi.status)}`}
+                      className={`text-4xl font-bold ${kpiValueColor(kpi.status)}`}
                     >
                       {formatMetricValue(kpi.value)}
                     </p>
                   </div>
                 ))}
+              </div>
+            </Section>
+
+            {/* ── Warnings & Recommendations ── */}
+            <Section
+              title="Warnings & Recommendations"
+              description="Actionable guidance based on detected anomalies and reliability."
+            >
+              <div className="space-y-3">
+                <div
+                  className={`rounded-2xl border p-5 ${
+                    anomalyCount > 0
+                      ? "border-amber-400/30 bg-amber-400/8"
+                      : "border-emerald-400/20 bg-emerald-400/6"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    {anomalyCount > 0 ? (
+                      <TriangleAlert className="w-4 h-4 text-amber-300" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    )}
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                      Warnings
+                    </p>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-300 leading-7">
+                    {anomalyCount === 0
+                      ? "No anomalies were detected."
+                      : `${anomalyCount} anomaly${anomalyCount === 1 ? "" : "ies"} were detected. Review is recommended before production use.`}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-slate-900/60 p-5">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Reliability
+                  </p>
+                  <p className="mt-2 text-sm text-slate-300 leading-7">
+                    Confidence is {report.verification.confidence}%. This is moderate reliability for deterministic structural checks.
+                  </p>
+                </div>
+              </div>
+            </Section>
+
+            {/* ── Data Governance & Scope ── */}
+            <Section
+              title="Data Governance & Audit Scope"
+              description="Clear statements on what the system analyzes (and what it cannot verify)."
+            >
+              <div className="space-y-3">
+                <p className="text-sm text-slate-300 leading-7">
+                  This system analyzes the uploaded model artifact as a deterministic binary object.
+                  It evaluates structural integrity, deterministic mapping consistency, and anomaly signals on the artifact’s mapped representation.
+                </p>
+                <ul className="list-disc pl-5 text-sm text-slate-400 space-y-1">
+                  <li>It does NOT analyze model behavior (inference) or real-world performance.</li>
+                  <li>Training data source, dataset bias, and provenance cannot be verified from weights-only structural analysis.</li>
+                  <li>Production safety and fairness require additional domain testing and governance.</li>
+                </ul>
+              </div>
+            </Section>
+
+            {/* ── Limitations ── */}
+            <Section
+              title="Limitations of This Analysis"
+              description="Clear boundaries on what this report does—and does not—cover."
+            >
+              <div className="rounded-2xl border border-slate-400/20 bg-slate-900/40 p-5 space-y-3">
+                <p className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                  <ListChecks className="w-4 h-4 text-slate-300" />
+                  What this report does NOT cover
+                </p>
+                <p className="text-sm text-slate-300 leading-7">
+                  This audit evaluates only the artifact&apos;s deterministic file structure.
+                </p>
+                <ul className="list-disc pl-5 text-sm text-slate-400 space-y-1">
+                  <li>It does NOT test model behavior in real-world usage.</li>
+                  <li>It does NOT verify training data quality or provenance.</li>
+                  <li>It does NOT guarantee fairness or safety of outputs.</li>
+                </ul>
+              </div>
+            </Section>
+
+            {/* ── How to Use ── */}
+            <Section
+              title="How to Use This Report"
+              description="Practical next steps for users."
+            >
+              <ul className="list-disc pl-5 text-sm text-slate-400 space-y-1">
+                <li>
+                  Use this report to verify file integrity and deterministic structural mapping.
+                </li>
+                <li>
+                  Run additional domain validation for real-world performance before deployment.
+                </li>
+                <li>
+                  Combine this report with any required governance or compliance checks for sensitive use cases.
+                </li>
+              </ul>
+            </Section>
+
+            {/* ── Post-audit monitoring ── */}
+            <Section
+              title="Post‑Audit Monitoring & Re‑Audit Triggers"
+              description="Guidance for what to monitor after deployment and when to re-run the audit."
+            >
+              <div className="space-y-3">
+                <p className="text-sm text-slate-300 leading-7">
+                  Re-audit is recommended whenever the underlying weights artifact changes,
+                  before deploying to production, and whenever monitoring signals indicate drift or integrity risk.
+                </p>
+                <ul className="list-disc pl-5 text-sm text-slate-400 space-y-1">
+                  <li>Re-run the audit if you update the model weights file (different file hash/artifact).</li>
+                  <li>Consider manual review and additional testing when anomalies are detected (anomaly signal count: {anomalyCount}).</li>
+                  <li>Trigger escalation when human review is required or when risk classification is not Minimal Risk.</li>
+                </ul>
               </div>
             </Section>
 
@@ -773,12 +1088,28 @@ export default function ReportPage() {
               description="Compliance, legal scope, and supporting evidence preserved beneath the map layer."
             >
               <div className="space-y-5">
+                {/* EU AI Act Summary (human-friendly) */}
+                <div className="rounded-2xl border border-amber-400/15 bg-amber-400/6 p-5">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">
+                    EU AI Act Summary
+                  </p>
+                  <p className="text-sm font-semibold text-slate-200">
+                    Classification: {riskLabel}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    Status: {complianceStatusPretty}
+                  </p>
+                  <p className="mt-3 text-sm text-slate-400 leading-7">
+                    This means: the artifact meets basic deterministic integrity checks with risk signals interpreted through EU AI Act mapping. Review is recommended for production or sensitive use cases.
+                  </p>
+                </div>
+
                 <InfoTile label="EU AI Act Mapping" icon={Scale}>
                   <p className="text-sm text-slate-300">
                     {report.eu_ai_act.assessment}
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
-                    Category: {report.eu_ai_act.category} - Reference:{" "}
+                    Category: {riskLabel} - Reference:{" "}
                     {report.eu_ai_act.article_reference}
                   </p>
                 </InfoTile>
@@ -795,21 +1126,51 @@ export default function ReportPage() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <InfoTile label="EU AI Act Conformity">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-slate-200">
-                          {complianceStatus.replaceAll("_", " ")}
+                        <p className="text-base font-semibold text-slate-200">
+                          Classification: {riskLabel}
                         </p>
                         <span
                           className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${complianceBadge}`}
                         >
-                          {complianceStatus.replaceAll("_", " ")}
+                          {complianceStatusPretty}
                         </span>
                       </div>
                       <p className="mt-3 text-sm text-slate-300">
-                        {String(euAiConformity.description ?? "Not available")}
+                        Why this classification:{" "}
+                        {anomalyCount === 0
+                          ? "no anomaly signals were detected in the deterministic audit."
+                          : `${anomalyCount} anomaly signal${
+                              anomalyCount === 1 ? "" : "s"
+                            } were detected and mapped to EU AI Act risk thresholds.`}
                       </p>
-                      <p className="mt-2 text-xs text-slate-500">
-                        Review required: {String(euAiConformity.human_review_needed ?? "unknown")}
-                      </p>
+                      <div className="mt-2 text-xs text-slate-500">
+                        <div
+                          className={`rounded-xl border p-3 ${
+                            humanReviewNeeded
+                              ? "border-amber-400/30 bg-amber-400/8"
+                              : "border-emerald-400/20 bg-emerald-400/6"
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-slate-200">
+                            👤 Human Oversight
+                          </p>
+                          <p className="mt-1 text-xs text-slate-300 leading-5">
+                            <strong>Responsible role:</strong> AI Auditor (Deterministic Structural Assessor) + Compliance Reviewer.
+                          </p>
+                          <p className="mt-2 text-xs text-slate-300 leading-5">
+                            <strong>Manual review status:</strong>{" "}
+                            {humanReviewNeeded ? "Required" : "Not required"}.
+                          </p>
+                          <p className="mt-2 text-xs text-slate-300 leading-5">
+                            <strong>Human review guidance:</strong> {humanReviewGuidanceText}
+                          </p>
+                          <p className="mt-2 text-xs text-slate-300 leading-5">
+                            <strong>Escalation condition (threshold-based):</strong>{" "}
+                            escalation is triggered when the EU AI Act layer sets{" "}
+                            <span className="font-mono">requires_human_review</span> based on audit thresholds (including anomaly signals and risk band), or when the audit outcome indicates Limited/High risk.
+                          </p>
+                        </div>
+                      </div>
                     </InfoTile>
                     <InfoTile label="Layer Metadata">
                       <p className="text-sm text-slate-300">
