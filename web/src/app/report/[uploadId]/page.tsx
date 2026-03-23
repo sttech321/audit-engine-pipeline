@@ -114,6 +114,11 @@ const ARTICLE_KEYS = [
   "Art_15_robustness",
 ] as const;
 
+type ArticleCard = {
+  key: (typeof ARTICLE_KEYS)[number];
+  title: string;
+  summary: string;
+};
 const getArticleCards = (value: Record<string, unknown> | null) =>
   ARTICLE_KEYS.map((key) => {
     const block = value?.[key];
@@ -132,7 +137,7 @@ const getArticleCards = (value: Record<string, unknown> | null) =>
           "Assessment available in attached report.",
       ),
     };
-  }).filter((item): item is { key: string; title: string; summary: string } => item !== null);
+  }).filter((item): item is ArticleCard => item !== null);
 
 const Section = ({
   title,
@@ -1269,3 +1274,4 @@ export default function ReportPage() {
     </div>
   );
 }
+
