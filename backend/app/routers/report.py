@@ -23,7 +23,12 @@ from app.models.common_schemas import (
     ExtendedAuditResult
 )
 from app.services.pdf_generator import get_pdf_generator, generate_pdf_html, PDF_AVAILABLE
-from app.services.svg_generator import generate_penrose_svg, generate_minimal_svg
+from app.services.artifact_chain import get_artifact_chain
+from app.services.svg_generator import (
+    generate_penrose_svg,
+    generate_penrose_svg_viewport,
+    generate_minimal_svg,
+)
 
 
 router = APIRouter()
@@ -103,6 +108,34 @@ def get_cached_audit(upload_id: str) -> Optional[ExtendedAuditResult]:
     return cached
 
 
+def _generate_chain_view_svg(cached: ExtendedAuditResult) -> Optional[str]:
+    """Render Penrose SVG using chain-anchored viewport semantics."""
+    if not cached.penrose_details:
+        return None
+
+    penrose_data = dict(cached.penrose_details)
+    if not penrose_data.get("tau_vectors") and cached.map_position:
+        penrose_data["tau_vectors"] = list(cached.map_position.tau_vectors or [])
+
+    chain = get_artifact_chain()
+
+    try:
+        return generate_penrose_svg_viewport(
+            penrose_data=penrose_data,
+            chain=chain,
+            risk_level=cached.risk_badge.level.value,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Chain-viewport SVG generation failed, using legacy renderer: %s",
+            exc,
+        )
+        return generate_penrose_svg(
+            penrose_data,
+            risk_level=cached.risk_badge.level.value,
+        )
+
+
 # ─── Report Endpoints ────────────────────────────────────────────────────────
 
 @router.get("/report/{upload_id}/pdf")
@@ -125,12 +158,7 @@ async def download_pdf_report(upload_id: str):
     
     try:
         # Generate SVG
-        penrose_svg = None
-        if cached.penrose_details:
-            penrose_svg = generate_penrose_svg(
-                cached.penrose_details,
-                risk_level=cached.risk_badge.level.value
-            )
+        penrose_svg = _generate_chain_view_svg(cached)
         
         # Generate PDF
         generator = get_pdf_generator()
@@ -182,12 +210,7 @@ async def view_html_report(upload_id: str):
     
     try:
         # Generate SVG
-        penrose_svg = None
-        if cached.penrose_details:
-            penrose_svg = generate_penrose_svg(
-                cached.penrose_details,
-                risk_level=cached.risk_badge.level.value
-            )
+        penrose_svg = _generate_chain_view_svg(cached)
         
         # Generate HTML
         html_content = generate_pdf_html(
@@ -243,10 +266,9 @@ async def get_penrose_svg(
             if not cached.penrose_details:
                 raise HTTPException(status_code=404, detail="Penrose details not available")
             
-            svg_content = generate_penrose_svg(
-                cached.penrose_details,
-                risk_level=cached.risk_badge.level.value
-            )
+            svg_content = _generate_chain_view_svg(cached)
+            if svg_content is None:
+                raise HTTPException(status_code=404, detail="Penrose details not available")
         
         return Response(
             content=svg_content,

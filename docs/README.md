@@ -174,6 +174,7 @@ cat backend/data/artifact_chain.json | python -m json.tool
 | [QUICK_REFERENCE.md](./QUICK_REFERENCE.md)                             | Quick lookup for commands, endpoints, debugging | 15-30 min  |
 | [API_INTEGRATION_GUIDE.md](./API_INTEGRATION_GUIDE.md)                 | Complete API reference with code examples       | 60-90 min  |
 | [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)                             | Simple overview (existing)                      | 20 min     |
+| [MILESTONE_4_DOCS_CONSISTENCY_FIXES.md](./MILESTONE_4_DOCS_CONSISTENCY_FIXES.md) | Contract corrections from client review | 15-20 min |
 
 ### Project Files
 
@@ -260,6 +261,7 @@ cat backend/data/artifact_chain.json | python -m json.tool
 - `backend/app/routers/upload.py` - Single & chunked upload
 - `backend/app/routers/report.py` - Report generation
 - `backend/app/routers/mint.py` - NFT minting
+- `backend/app/routers/ipfs.py` - IPFS metadata upload
 
 **Services:**
 
@@ -267,6 +269,7 @@ cat backend/data/artifact_chain.json | python -m json.tool
 - `backend/app/services/artifact_chain.py` - Blockchain ledger
 - `backend/app/services/pdf_generator.py` - Report generation
 - `backend/app/services/file_validation.py` - Validation
+- `backend/eu_ai_act_layer.py` - EU AI Act Articles 9-15 enrichment
 
 **Data & Models:**
 
@@ -289,7 +292,7 @@ cat backend/data/artifact_chain.json | python -m json.tool
 **Pages:**
 
 - `web/src/app/upload/page.tsx` - Upload page
-- `web/src/app/report/page.tsx` - Report page
+- `web/src/app/report/[uploadId]/page.tsx` - Dynamic report page
 
 **Components:**
 
@@ -300,8 +303,8 @@ cat backend/data/artifact_chain.json | python -m json.tool
 
 **Utilities:**
 
-- `web/src/lib/api.ts` - API client
-- `web/src/lib/solana.ts` - Solana utilities
+- `web/src/app/upload/page.tsx` - Upload API orchestration
+- `web/src/components/MintFlow.tsx` - Mint/IPFS API orchestration
 
 ---
 
@@ -454,8 +457,8 @@ pytest --cov=app tests/            # With coverage
 
 ## Documentation Maintenance
 
-**Last Updated:** March 18, 2026
-**Version:** 1.0
+**Last Updated:** March 23, 2026
+**Version:** 1.1
 **Maintainer:** Development Team
 
 ### Updates needed for:

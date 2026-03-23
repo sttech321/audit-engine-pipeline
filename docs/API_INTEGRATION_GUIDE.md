@@ -26,12 +26,23 @@ Development: http://localhost:8000
 Production: [To be configured]
 ```
 
+### Interactive API Documentation
+
+- Swagger/OpenAPI UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
 ### API Format
 
 - **Protocol:** HTTP/REST
 - **Request format:** JSON (with multipart for file uploads)
 - **Response format:** JSON
 - **Async support:** All operations are async-ready
+
+### Naming Notes
+
+- `POST /api/upload` returns camelCase keys: `uploadId`, `fileHash`, `artifactBlock`.
+- Chunked endpoints use snake_case keys: `upload_id`, `uploaded_chunks`, etc.
+- Extended report payload (`/api/report/{upload_id}/extended`) uses snake_case model fields.
 
 ### Rate Limiting
 
@@ -119,9 +130,9 @@ with open(file_path, 'rb') as f:
     )
 
 result = response.json()
-print(f"Upload ID: {result['upload_id']}")
+print(f"Upload ID: {result['uploadId']}")
 print(f"Integrity Score: {result['kpis']}")
-print(f"Risk Level: {result['artifact_block']['manifold_hash']}")
+print(f"Risk Level: {result['artifactBlock']['manifold_hash']}")
 ```
 
 **JavaScript/TypeScript Example:**
@@ -140,47 +151,51 @@ async function uploadFile(file: File): Promise<string> {
     );
 
     const result = await response.json();
-    return result.upload_id;
+    return result.uploadId;
 }
 ```
 
-**Response (202 Accepted):**
+**Response (200 OK):**
 
 ```json
 {
-    "upload_id": "550e8400-e29b-41d4-a716-446655440000",
-    "file_name": "model_weights.safetensors",
-    "file_size": 4294967296,
-    "file_hash": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+    "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+    "fileInfo": {
+        "name": "model_weights.safetensors",
+        "size": 4294967296,
+        "type": "application/octet-stream"
+    },
+    "fileHash": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
     "kpis": [
         {
+            "id": "kpi-1",
             "label": "Integrity Score",
             "value": "87",
-            "status": "good"
+            "status": "good",
+            "trend": "stable"
         },
         {
+            "id": "kpi-2",
             "label": "Risk Level",
             "value": "MEDIUM",
-            "status": "warning"
+            "status": "warning",
+            "trend": "down"
         },
         {
+            "id": "kpi-3",
             "label": "Anomalies Found",
             "value": "3",
-            "status": "neutral"
-        },
-        {
-            "label": "KAG Score",
-            "value": "92.5",
-            "status": "good"
+            "status": "warning",
+            "trend": "up"
         }
     ],
     "verification": {
-        "status": "verified",
-        "confidence": 98.5,
-        "checks": ["format_valid", "signature_ok", "size_ok"],
-        "warnings": []
+        "status": "Verified with Warnings",
+        "confidence": 87,
+        "timestamp": "2026-03-18T14:30:00Z",
+        "checks": ["Stage 1 - Schema & Genesis: OK"]
     },
-    "artifact_block": {
+    "artifactBlock": {
         "index": 1042,
         "artifact_hash": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
         "tau_vectors": [0.618, 1.618, 0.381, 0.236, 0.146],
@@ -189,7 +204,9 @@ async function uploadFile(file: File): Promise<string> {
         "timestamp": "2026-03-18T14:30:00Z",
         "barycentric": [0.33, 0.33, 0.34]
     },
-    "message": "File processed successfully"
+    "metadata": {
+        "verification_mode": "full"
+    }
 }
 ```
 
@@ -235,8 +252,10 @@ POST /api/upload/chunked/init
 
 ```json
 {
-    "file_name": "large_model.safetensors",
-    "file_size": 5368709120
+    "filename": "large_model.safetensors",
+    "total_size": 5368709120,
+    "total_chunks": 256,
+    "chunk_size": 20971520
 }
 ```
 
@@ -248,8 +267,10 @@ import requests
 response = requests.post(
     'http://localhost:8000/api/upload/chunked/init',
     json={
-        'file_name': 'large_model.safetensors',
-        'file_size': 5368709120
+        'filename': 'large_model.safetensors',
+        'total_size': 5368709120,
+        'total_chunks': 256,
+        'chunk_size': 20 * 1024 * 1024
     }
 )
 
@@ -285,9 +306,9 @@ PUT /api/upload/chunked/{upload_id}/chunk/{chunk_index}
 
 ```http
 PUT /api/upload/chunked/550e8400-e29b-41d4-a716-446655440000/chunk/0 HTTP/1.1
-Content-Type: application/octet-stream
+Content-Type: multipart/form-data
 
-<binary chunk data - 20 MB>
+file: <binary chunk data - 20 MB>
 ```
 
 **Parameters:**
@@ -319,8 +340,7 @@ def upload_chunks(upload_id, file_path):
                 try:
                     response = requests.put(
                         f'http://localhost:8000/api/upload/chunked/{upload_id}/chunk/{chunk_index}',
-                        data=chunk,
-                        headers={'Content-Type': 'application/octet-stream'}
+                        files={'file': ('chunk.bin', chunk, 'application/octet-stream')}
                     )
                     response.raise_for_status()
                     print(f"Chunk {chunk_index} uploaded")
@@ -359,10 +379,11 @@ async function uploadChunks(
                     `${process.env.NEXT_PUBLIC_API_URL}/api/upload/chunked/${uploadId}/chunk/${i}`,
                     {
                         method: 'PUT',
-                        body: chunk,
-                        headers: {
-                            'Content-Type': 'application/octet-stream',
-                        },
+                        body: (() => {
+                            const formData = new FormData();
+                            formData.append('file', chunk, `chunk-${i}.bin`);
+                            return formData;
+                        })(),
                     },
                 );
 
@@ -383,10 +404,8 @@ async function uploadChunks(
 
 ```json
 {
-    "chunk_index": 0,
-    "uploaded_chunks": 1,
-    "remaining_chunks": 255,
-    "upload_id": "550e8400-e29b-41d4-a716-446655440000"
+    "chunk": 0,
+    "status": "ok"
 }
 ```
 
@@ -417,9 +436,8 @@ status = response.json()
 print(f"Uploaded: {status['uploaded_chunks']}/{status['total_chunks']}")
 print(f"Status: {status['status']}")
 
-if status['status'] == 'in_progress':
-    print(f"Resumable chunks: {status['resumable_chunks']}")
-    # Can retry these chunks
+if status['status'] in ('uploading', 'processing'):
+    print(f"Progress: {status['progress_pct']:.2f}%")
 ```
 
 **Response (200 OK):**
@@ -427,12 +445,16 @@ if status['status'] == 'in_progress':
 ```json
 {
     "upload_id": "550e8400-e29b-41d4-a716-446655440000",
-    "uploaded_chunks": 200,
+    "filename": "large_model.safetensors",
+    "total_size": 5368709120,
     "total_chunks": 256,
-    "resumable_chunks": [100, 101, 102],
-    "status": "in_progress",
-    "created_at": "2026-03-18T14:00:00Z",
-    "expires_at": "2026-03-18T16:00:00Z"
+    "chunk_size": 20971520,
+    "uploaded_chunks": [0, 1, 2],
+    "status": "uploading",
+    "progress_pct": 1.17,
+    "processing_pct": null,
+    "error": null,
+    "result": null
 }
 ```
 
@@ -476,9 +498,9 @@ for i in range(120):  # Wait up to 2 minutes
 
 ```json
 {
+    "status": "processing",
     "upload_id": "550e8400-e29b-41d4-a716-446655440000",
-    "message": "Upload completed, processing started",
-    "status_url": "/api/report/550e8400-e29b-41d4-a716-446655440000"
+    "message": "RIM-OS audit started; poll /status for progress"
 }
 ```
 
@@ -563,10 +585,10 @@ GET /api/report/{upload_id}/svg
 
 **Returns:**
 
-- Penrose tiling visualization
-- Artifact position marked on map
-- Genesis Mint references
-- Coordinates with legend
+- Chain-anchored global manifold viewport (not per-artifact isolated seed)
+- Artifact position marker rendered within shared chain tiling
+- Chain context label (`Global M · Chain={n} blocks`)
+- Risk badge and τ preview label
 
 **Python Example:**
 
@@ -593,7 +615,44 @@ html = f"""
 
 ## NFT Minting APIs
 
-### Prepare Mint Metadata
+### 1. Upload Metadata (IPFS)
+
+**Endpoint:**
+
+```
+POST /api/ipfs/upload
+```
+
+**Request:**
+
+```json
+{
+  "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+  "fileHash": "3f...64hex",
+  "metadata": {
+    "name": "RIMOS #550e8400",
+    "description": "Audit certificate metadata",
+    "attributes": [{ "trait_type": "Risk Level", "value": "Medium Risk" }]
+  },
+  "auditData": {
+    "integrityScore": 91.2,
+    "riskLevel": "Medium Risk"
+  }
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "url": "https://gateway.pinata.cloud/ipfs/Qm...",
+  "cid": "Qm...",
+  "provider": "pinata",
+  "fallbackUsed": false
+}
+```
+
+### 2. Prepare Mint
 
 **Endpoint:**
 
@@ -601,60 +660,42 @@ html = f"""
 POST /api/mint/prepare
 ```
 
-**Purpose:**
-
-- Prepare IPFS metadata
-- Get cost estimate
-- Validate wallet address
-
 **Request:**
 
 ```json
 {
-    "upload_id": "550e8400-e29b-41d4-a716-446655440000",
-    "creator_wallet": "So1111111111111111111111111111111111111111111"
+  "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+  "walletAddress": "So1111111111111111111111111111111111111111111",
+  "fileHash": "3f...64hex",
+  "metadata": {
+    "name": "RIMOS #550e8400",
+    "symbol": "RIMOS"
+  },
+  "metadataUrl": "https://gateway.pinata.cloud/ipfs/Qm...",
+  "auditData": {
+    "integrityScore": 91.2
+  }
 }
-```
-
-**Python Example:**
-
-```python
-import requests
-
-response = requests.post(
-    'http://localhost:8000/api/mint/prepare',
-    json={
-        'upload_id': '550e8400-e29b-41d4-a716-446655440000',
-        'creator_wallet': 'So1111111111111111111111111111111111111111111'
-    }
-)
-
-prep = response.json()
-print(f"IPFS URL: {prep['ipfs_url']}")
-print(f"Fee estimate: {prep['fee_estimate']} SOL")
 ```
 
 **Response (200 OK):**
 
 ```json
 {
-    "ipfs_url": "https://ipfs.io/ipfs/QmXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "metadata": {
-        "name": "model_weights Review Certificate",
-        "description": "Integrity score: 87, Risk: MEDIUM",
-        "image": "data:image/svg+xml;base64,...",
-        "attributes": [
-            { "trait_type": "Integrity Score", "value": "87" },
-            { "trait_type": "Risk Level", "value": "MEDIUM" },
-            { "trait_type": "Anomalies", "value": "3" }
-        ]
-    },
-    "fee_estimate": 0.002,
-    "message": "Metadata prepared successfully"
+  "metadata": {
+    "url": "https://gateway.pinata.cloud/ipfs/Qm...",
+    "provider": "custom",
+    "fallbackUsed": false
+  },
+  "mintHash": "ab...64hex",
+  "nftMetadata": {
+    "name": "RIMOS #550e8400",
+    "symbol": "RIMOS"
+  }
 }
 ```
 
-### Finalize Mint
+### 3. Finalize Mint
 
 **Endpoint:**
 
@@ -662,18 +703,13 @@ print(f"Fee estimate: {prep['fee_estimate']} SOL")
 POST /api/mint/finalize
 ```
 
-**Purpose:**
-
-- Create actual NFT on Solana
-- Requires signed transaction from user's wallet
-
 **Request:**
 
 ```json
 {
-    "upload_id": "550e8400-e29b-41d4-a716-446655440000",
-    "transaction_signature": "5vFHkqa8tgvhixVVHHKsz5yKwqDpmcMkV8xs9P7r3D5R8bvxiLkxpAVksKxVHHKsz5yKwqDpmcMkV8xs9P7r3D5R",
-    "creator_wallet": "So1111111111111111111111111111111111111111111"
+  "mintAddress": "So1111111111111111111111111111111111111111111",
+  "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+  "signature": "5vFHkqa8tgvhixVV..."
 }
 ```
 
@@ -681,11 +717,17 @@ POST /api/mint/finalize
 
 ```json
 {
-    "nft_mint_address": "So1111111111111111111111111111111111111111111",
-    "transaction_signature": "5vFHkqa8tgvhixVVHHKsz5yKwqDpmcMkV8xs9P7r3D5R8bvxiLkxpAVksKxVHHKsz5yKwqDpmcMkV8xs9P7r3D5R",
-    "explorer_url": "https://explorer.solana.com/address/So1111111111111111111111111111111111111111111",
-    "message": "NFT minted successfully"
+  "success": true,
+  "message": "Mint successfully finalized"
 }
+```
+
+### NFT Feature Flag
+
+Mint UI is optional in frontend and controlled by:
+
+```env
+NEXT_PUBLIC_ENABLE_NFT=true
 ```
 
 ---
@@ -797,7 +839,7 @@ async function uploadWithErrorHandling(file: File): Promise<string> {
         }
 
         const result = await response.json();
-        return result.upload_id;
+        return result.uploadId;
     } catch (error) {
         console.error('Upload failed:', error);
         throw error;
@@ -837,7 +879,12 @@ class RIMOSClient:
         # Initialize
         init_response = requests.post(
             f'{self.base_url}/api/upload/chunked/init',
-            json={'file_name': os.path.basename(file_path), 'file_size': file_size}
+            json={
+                'filename': os.path.basename(file_path),
+                'total_size': file_size,
+                'total_chunks': (file_size + chunk_size - 1) // chunk_size,
+                'chunk_size': chunk_size,
+            }
         )
         upload_id = init_response.json()['upload_id']
 
@@ -852,8 +899,7 @@ class RIMOSClient:
 
                 requests.put(
                     f'{self.base_url}/api/upload/chunked/{upload_id}/chunk/{chunk_idx}',
-                    data=chunk,
-                    headers={'Content-Type': 'application/octet-stream'}
+                    files={'file': ('chunk.bin', chunk, 'application/octet-stream')}
                 )
 
                 progress = (chunk_idx * chunk_size / file_size) * 100
@@ -948,8 +994,10 @@ export function FileUploadComponent() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        file_name: file.name,
-        file_size: file.size,
+        filename: file.name,
+        total_size: file.size,
+        total_chunks: Math.ceil(file.size / CHUNK_SIZE),
+        chunk_size: CHUNK_SIZE,
       }),
     });
 
@@ -967,8 +1015,11 @@ export function FileUploadComponent() {
         `${API_URL}/api/upload/chunked/${upload_id}/chunk/${i}`,
         {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/octet-stream' },
-          body: chunk,
+          body: (() => {
+            const formData = new FormData();
+            formData.append('file', chunk, `chunk-${i}.bin`);
+            return formData;
+          })(),
         }
       );
 
@@ -990,7 +1041,7 @@ export function FileUploadComponent() {
         const response = await fetch(`${API_URL}/api/report/${uploadId}/pdf`);
         if (response.ok) {
           const dataResponse = await (
-            await fetch(`${API_URL}/api/report/${uploadId}/json`)
+            await fetch(`${API_URL}/api/report/${uploadId}/extended`)
           ).json();
           setResult(dataResponse);
           return;
@@ -1016,7 +1067,7 @@ export function FileUploadComponent() {
       {result && (
         <div>
           <p>Score: {result.kpis[0].value}</p>
-          <p>Risk: {result.artifact_block.manifold_hash}</p>
+          <p>Risk: {result.artifactBlock.manifold_hash}</p>
         </div>
       )}
     </div>
@@ -1069,5 +1120,5 @@ POST {{webhook_url}} with payload:
 
 ---
 
-**Last Updated:** March 18, 2026
-**Version:** 1.0
+**Last Updated:** March 23, 2026
+**Version:** 1.1

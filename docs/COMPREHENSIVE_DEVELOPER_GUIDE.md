@@ -288,7 +288,19 @@ run_rim_audit(file_path: str) → ExtendedAuditResult
 
 **Path:** [services/pdf_generator.py](../backend/app/services/pdf_generator.py)
 
-#### 7. `artifact_chain.py` - Blockchain Ledger
+#### 7. `eu_ai_act_layer.py` - Compliance Enrichment Layer
+
+**Purpose:** Adds EU AI Act Articles 9-15 assessment payloads to the canonical report.
+
+**Output fields attached to report:**
+
+- `EU_AI_ACT_FULL` (structured full payload)
+- `EU_AI_ACT_HASH` (stable hash of that payload)
+- Human oversight/review flags consumed by report UI
+
+**Path:** [eu_ai_act_layer.py](../backend/eu_ai_act_layer.py)
+
+#### 8. `artifact_chain.py` - Blockchain Ledger
 
 **Purpose:** Maintains internal blockchain of artifact positions.
 
@@ -325,14 +337,13 @@ class ArtifactBlock:
     timestamp: datetime
 
 class UploadResponse:
-    upload_id: str
-    file_name: str
-    file_size: int
-    file_hash: str
+    uploadId: str
+    fileInfo: FileInfo
+    fileHash: str
     kpis: List[KPI]
     verification: VerificationStatus
-    artifact_block: ArtifactBlock
-    message: str
+    metadata: Dict[str, Any]
+    artifactBlock: ArtifactBlock | None
 ```
 
 ---
@@ -351,19 +362,14 @@ web/
 │   │   ├── upload/
 │   │   │   └── page.tsx          # Upload detail page
 │   │   └── report/
-│   │       └── page.tsx          # Report view page
+│   │       └── [uploadId]/
+│   │           └── page.tsx      # Dynamic report view page
 │   ├── components/
 │   │   ├── FileUpload.tsx        # Drag-drop file input
 │   │   ├── KPIDisplay.tsx        # KPI grid visualization
 │   │   ├── BlockchainInfo.tsx    # Artifact block display
 │   │   ├── MintFlow.tsx          # NFT minting wizard
 │   │   ├── WalletProvider.tsx    # Solana wallet setup
-│   │   ├── ReportViewer.tsx      # PDF/HTML/SVG viewer
-│   │   └── StatusIndicator.tsx   # Upload progress indicator
-│   └── lib/
-│       ├── api.ts                # API client functions
-│       ├── solana.ts             # Solana utilities
-│       └── utils.ts              # Helper functions
 ├── package.json
 ├── tsconfig.json
 ├── next.config.ts
@@ -456,15 +462,12 @@ interface BlockchainInfoProps {
 
 ```typescript
 interface MintFlowProps {
-    uploadId: string;
-    artifactHash: string;
-    onMintComplete: (nftUrl: string) => void;
+    uploadData: UploadResponse;
 }
 ```
 
 #### 5. **API Client Functions**
 
-**Location:** `src/lib/api.ts`
 
 **Key functions:**
 
@@ -754,20 +757,24 @@ finalizeMint(uploadId: string, signature: string): Promise<MintResult>
   │
   ├─ User connects Solana wallet (Phantom/Solflare)
   │
+  ├─ Frontend calls: POST /api/ipfs/upload
+  │  ├─ Backend IPFS layer prepares/stores metadata payload
+  │  └─ Returns: {url, cid, provider, fallbackUsed}
+  │
   ├─ Frontend calls: POST /api/mint/prepare
-  │  ├─ Backend prepares NFT metadata
+  │  ├─ Backend builds deterministic mint context
   │  │  ├─ Name: "{file_name} Review Certificate"
   │  │  ├─ Description: "Integrity score: {score}, Risk: {level}"
-  │  │  ├─ Image: SVG visualization of Penrose tiling
-  │  │  ├─ Attributes: score, risk_level, tau_vectors, etc.
-  │  │  └─ Upload to IPFS
+  │  │  ├─ Metadata URL from /api/ipfs/upload
+  │  │  └─ Deterministic mint hash
   │  │
-  │  └─ Returns: {ipfs_url, metadata_json}
+  │  └─ Returns: {metadata{url,provider,fallbackUsed}, mintHash, nftMetadata}
   │
-  ├─ Frontend calls: POST /api/mint/finalize with signed transaction
-  │  ├─ Backend creates NFT using Metaplex on Solana Devnet
-  │  ├─ Transaction signed by user's connected wallet
-  │  └─ Returns: {nft_mint_address, transaction_signature}
+  ├─ Frontend creates NFT via Metaplex client-side (wallet signs transaction)
+  │
+  ├─ Frontend calls: POST /api/mint/finalize
+  │  ├─ Backend records finalized mint metadata
+  │  └─ Returns: {success, message}
   │
   └─ Display NFT URL to user
      └─ User can view on Solana blockchain explorer
@@ -819,6 +826,9 @@ Aperiodic mathematical tiling of the plane.
 ---
 
 ## API Reference
+
+> Contract source of truth: [API_INTEGRATION_GUIDE.md](./API_INTEGRATION_GUIDE.md) and backend Pydantic schemas in `backend/app/models/*_schemas.py`.
+> Use this section as architectural reference; for exact request/response payloads always follow the API guide.
 
 ### Upload Endpoints
 
@@ -967,6 +977,30 @@ Error: 404 if not yet generated
 
 ### NFT Minting Endpoints
 
+#### Upload Metadata to IPFS
+
+```
+POST /api/ipfs/upload
+
+Request:
+  Content-Type: application/json
+  Body:
+    {
+      "uploadId": "string",
+      "fileHash": "64-char sha256 hex",
+      "metadata": { ... },
+      "auditData": { ... } // optional
+    }
+
+Response (200 OK):
+  {
+    "url": "https://.../ipfs/{cid}",
+    "cid": "string",
+    "provider": "pinata|nft_storage|fallback",
+    "fallbackUsed": false
+  }
+```
+
 #### Prepare Mint Metadata
 
 ```
@@ -976,16 +1010,19 @@ Request:
   Content-Type: application/json
   Body:
     {
-      "upload_id": "string",
-      "creator_wallet": "string (Solana address)"
+      "uploadId": "string",
+      "walletAddress": "string (Solana address)",
+      "fileHash": "64-char sha256 hex",
+      "metadata": { ... },
+      "metadataUrl": "https://.../ipfs/{cid}", // optional
+      "auditData": { ... } // optional
     }
 
 Response (200 OK):
   {
-    "ipfs_url": "https://ipfs.io/ipfs/{hash}",
-    "metadata": { NFT metadata },
-    "fee_estimate": number,
-    "message": "Metadata prepared"
+    "metadata": { "url": "...", "provider": "...", "fallbackUsed": false },
+    "mintHash": "string",
+    "nftMetadata": { "name": "string", "symbol": "string" }
   }
 ```
 
@@ -998,17 +1035,15 @@ Request:
   Content-Type: application/json
   Body:
     {
-      "upload_id": "string",
-      "transaction_signature": "string",
-      "creator_wallet": "string"
+      "mintAddress": "string",
+      "uploadId": "string",
+      "signature": "string"
     }
 
 Response (200 OK):
   {
-    "nft_mint_address": "string (Solana address)",
-    "transaction_signature": "string",
-    "explorer_url": "https://explorer.solana.com/address/{mint}",
-    "message": "NFT minted successfully"
+    "success": true,
+    "message": "Mint successfully finalized"
   }
 ```
 
@@ -1087,7 +1122,6 @@ npm run dev
     - Test responsive design (mobile, tablet, desktop)
 
 3. **Add API integration:**
-    - Update `src/lib/api.ts` with new API calls
     - Use React hooks (`useEffect`, `useState`, custom hooks)
     - Add proper error handling and loading states
 
@@ -1107,7 +1141,6 @@ npm run dev
 - Functional components with hooks
 - Props interfaces for all components
 - Descriptive component names (PascalCase)
-- Utility functions in `src/lib/`
 
 ### Running Tests
 
@@ -1260,7 +1293,6 @@ ptw
 
 - Verify backend is running (`http://localhost:8000`)
 - Check CORS settings in `app/main.py`
-- Verify API base URL in `src/lib/api.ts` matches backend port
 - Check browser console for specific error
 
 #### 2. **Upload Progress Stuck**
@@ -1300,7 +1332,6 @@ ptw
 | [app/services/artifact_chain.py](../backend/app/services/artifact_chain.py)                 | Blockchain ledger |
 | [src/components/FileUpload.tsx](../web/src/components/FileUpload.tsx)                       | Upload UI         |
 | [src/components/KPIDisplay.tsx](../web/src/components/KPIDisplay.tsx)                       | Results display   |
-| [src/lib/api.ts](../web/src/lib/api.ts)                                                     | API client        |
 
 ### Configuration Files
 
@@ -1332,6 +1363,7 @@ For questions or issues:
 
 ---
 
-**Last Updated:** March 18, 2026
-**Version:** 1.0
+**Last Updated:** March 23, 2026
+**Version:** 1.1
 **Status:** Complete
+

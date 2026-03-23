@@ -8,6 +8,7 @@ RIMOS Spec Compliant:
 - Connected, edge-sharing aperiodic tiling
 """
 import hashlib
+import json
 import math
 from typing import Dict, Any, List, Tuple
 
@@ -245,6 +246,203 @@ def generate_penrose_svg(
         svg.append(f'  <text x="{SVG_CENTER_X}" y="18" text-anchor="middle" fill="#94a3b8" font-size="10">Penrose P3 · τ={tau:.4f} θ={theta:.4f}</text>')
     if show_hash:
         svg.append(f'  <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT-10}" text-anchor="middle" fill="#475569" font-size="8">{penrose_hash}</text>')
+    svg.append("</svg>")
+    return "\n".join(svg)
+
+
+def _chain_seed(chain: List[Dict[str, Any]]) -> str:
+    """
+    Derive a deterministic seed from chain state.
+
+    The global map must shift when chain history shifts, so we include stable
+    per-block values in canonical JSON form.
+    """
+    normalized_blocks = []
+    for block in sorted(chain or [], key=lambda b: b.get("index", 0)):
+        tau_values = block.get("tau_vectors", [])
+        if not isinstance(tau_values, list):
+            tau_values = [tau_values]
+
+        normalized_tau: List[float] = []
+        for value in tau_values:
+            try:
+                normalized_tau.append(float(value))
+            except (TypeError, ValueError):
+                continue
+
+        anchors = block.get("anchors", [])
+        if not isinstance(anchors, list):
+            anchors = [str(anchors)]
+
+        normalized_blocks.append(
+            {
+                "index": int(block.get("index", 0)),
+                "block_hash": str(block.get("block_hash", "")),
+                "tau_vectors": normalized_tau,
+                "anchors": [str(anchor) for anchor in anchors],
+            }
+        )
+
+    payload = json.dumps(
+        normalized_blocks,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _tau_to_tiling_coords(tau_vectors: List[float], global_scale: float = 1.0) -> Tuple[float, float]:
+    """
+    Map tau vectors to 2D coordinates on the global manifold viewport.
+
+    We project tau[1] and tau[2] as free axes (tau[0]/tau[4] are constrained in
+    upstream geometry construction).
+    """
+    if not tau_vectors:
+        return (0.0, 0.0)
+
+    tau1 = float(tau_vectors[1]) if len(tau_vectors) > 1 else float(tau_vectors[0])
+    tau2 = float(tau_vectors[2]) if len(tau_vectors) > 2 else float(tau_vectors[0])
+    x = tau1 * PHI * global_scale
+    y = tau2 * PHI * global_scale
+    return (x, y)
+
+
+def generate_penrose_svg_viewport(
+    penrose_data: Dict[str, Any],
+    chain: List[Dict[str, Any]],
+    risk_level: str = "LOW",
+    viewport_radius: float = 0.6,
+    show_labels: bool = True,
+) -> str:
+    """
+    Render a chain-anchored viewport cutout of the global Penrose tiling.
+
+    Unlike generate_penrose_svg(), this does not treat each artifact as an
+    isolated universe. The chain defines one global tiling, and the artifact is
+    rendered as a marked position within that shared manifold.
+    """
+    global_seed = _chain_seed(chain)
+    risk_color = RISK_COLORS.get(risk_level, RISK_COLORS["LOW"])
+    sector = int(penrose_data.get("sector", 0))
+    penrose_hash = str(penrose_data.get("penrose_hash", ""))[:16]
+    chain_len = len(chain or [])
+
+    rhombi = _inflate_penrose(global_seed, iterations=6)
+    if not rhombi:
+        rhombi = _inflate_penrose(global_seed + "fallback", iterations=5)
+    if not rhombi:
+        return generate_penrose_svg(
+            penrose_data=penrose_data,
+            risk_level=risk_level,
+            show_labels=show_labels,
+            show_hash=True,
+        )
+
+    tau_raw = penrose_data.get("tau_vectors", penrose_data.get("tau", [0.5]))
+    if not isinstance(tau_raw, list):
+        tau_raw = [tau_raw]
+
+    tau_vectors: List[float] = []
+    for value in tau_raw:
+        try:
+            tau_vectors.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if not tau_vectors:
+        tau_vectors = [0.5]
+
+    xs = [r["center"].real for r in rhombi]
+    ys = [r["center"].imag for r in rhombi]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    span = max(max_x - min_x, max_y - min_y, 0.01)
+
+    artifact_x_rel, artifact_y_rel = _tau_to_tiling_coords(tau_vectors)
+    artifact_x = min_x + (artifact_x_rel % 1.0) * max(max_x - min_x, 0.01)
+    artifact_y = min_y + (artifact_y_rel % 1.0) * max(max_y - min_y, 0.01)
+
+    normalized_radius = min(max(viewport_radius, 0.2), 1.0)
+    view_span = span * normalized_radius
+    scale = (SVG_WIDTH * 0.88) / max(view_span, 0.01)
+    cx_off = SVG_CENTER_X - artifact_x * scale
+    cy_off = SVG_CENTER_Y - artifact_y * scale
+
+    half_span = view_span * 0.55
+    visible_rhombi = [
+        r
+        for r in rhombi
+        if abs(r["center"].real - artifact_x) < half_span
+        and abs(r["center"].imag - artifact_y) < half_span
+    ]
+    if len(visible_rhombi) < 20:
+        visible_rhombi = rhombi
+
+    gradient_defs = []
+    for i, base in enumerate(TILE_BASE_COLORS):
+        hex_val = base.lstrip("#")
+        red = int(hex_val[0:2], 16) / 255
+        green = int(hex_val[2:4], 16) / 255
+        blue = int(hex_val[4:6], 16) / 255
+        light = f"rgb({int(min(255, red * 255 * 1.35))},{int(min(255, green * 255 * 1.35))},{int(min(255, blue * 255 * 1.35))})"
+        dark = f"rgb({int(max(0, red * 255 * 0.75))},{int(max(0, green * 255 * 0.75))},{int(max(0, blue * 255 * 0.75))})"
+        gradient_defs.append(
+            f'    <linearGradient id="gv{i}" x1="0%" y1="0%" x2="100%" y2="100%">'
+            f'<stop offset="0%" style="stop-color:{light}"/>'
+            f'<stop offset="100%" style="stop-color:{dark}"/>'
+            f"</linearGradient>"
+        )
+
+    svg = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}" width="{SVG_WIDTH}" height="{SVG_HEIGHT}">',
+        "  <defs>",
+        '    <linearGradient id="bgv" x1="0%" y1="0%" x2="100%" y2="100%">',
+        '      <stop offset="0%" style="stop-color:#0f172a"/>',
+        '      <stop offset="100%" style="stop-color:#1e293b"/>',
+        "    </linearGradient>",
+        *gradient_defs,
+        "  </defs>",
+        '  <rect width="100%" height="100%" fill="url(#bgv)"/>',
+        '  <g id="tiles">',
+    ]
+
+    for i, rhombus in enumerate(visible_rhombi):
+        color_idx = (
+            hashlib.sha256((global_seed + str(i)).encode()).digest()[0] + sector
+        ) % len(TILE_BASE_COLORS)
+        path = _path_from_complex_verts(rhombus["vertices"], cx_off, cy_off, scale)
+        dist = abs(rhombus["center"].real - artifact_x) + abs(rhombus["center"].imag - artifact_y)
+        opacity = 1.0 if dist < view_span * 0.15 else 0.76
+        svg.append(
+            f'    <path d="{path}" fill="url(#gv{color_idx})" stroke="#000" stroke-width="0.4" fill-opacity="{opacity:.2f}"/>'
+        )
+
+    marker_x = SVG_CENTER_X
+    marker_y = SVG_CENTER_Y
+    marker_r = 8
+
+    svg.extend(
+        [
+            "  </g>",
+            f'  <circle cx="{marker_x}" cy="{marker_y}" r="{marker_r + 4}" fill="none" stroke="{risk_color}" stroke-width="1.5" opacity="0.4"/>',
+            f'  <circle cx="{marker_x}" cy="{marker_y}" r="{marker_r}" fill="{risk_color}" fill-opacity="0.9" stroke="white" stroke-width="1"/>',
+            f'  <line x1="{marker_x - 14}" y1="{marker_y}" x2="{marker_x + 14}" y2="{marker_y}" stroke="{risk_color}" stroke-width="0.8" opacity="0.6"/>',
+            f'  <line x1="{marker_x}" y1="{marker_y - 14}" x2="{marker_x}" y2="{marker_y + 14}" stroke="{risk_color}" stroke-width="0.8" opacity="0.6"/>',
+            f'  <rect x="{SVG_WIDTH - 55}" y="15" width="45" height="20" rx="10" fill="{risk_color}" fill-opacity="0.9"/>',
+            f'  <text x="{SVG_WIDTH - 32}" y="29" text-anchor="middle" fill="white" font-size="10" font-weight="bold">{risk_level}</text>',
+        ]
+    )
+
+    if show_labels:
+        tau_preview = ",".join(f"{value:.3f}" for value in tau_vectors[:3])
+        tau_label = f"τ=[{tau_preview}{'...' if len(tau_vectors) > 3 else ''}]"
+        svg.extend(
+            [
+                f'  <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="#94a3b8" font-size="9">Global M · Chain={chain_len} blocks</text>',
+                f'  <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT - 10}" text-anchor="middle" fill="#475569" font-size="8">{tau_label} · {penrose_hash}</text>',
+            ]
+        )
+
     svg.append("</svg>")
     return "\n".join(svg)
 

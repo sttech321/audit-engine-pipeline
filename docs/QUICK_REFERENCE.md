@@ -106,8 +106,9 @@ GET    /api/report/{id}/svg                 Get Penrose visualization
 ### NFT Minting
 
 ```
+POST   /api/ipfs/upload                     Upload/prep metadata to IPFS provider
 POST   /api/mint/prepare                    Prepare metadata
-POST   /api/mint/finalize                   Create NFT on Solana
+POST   /api/mint/finalize                   Finalize mint record after wallet tx
 ```
 
 ---
@@ -118,13 +119,13 @@ POST   /api/mint/finalize                   Create NFT on Solana
 
 ```json
 {
-  "upload_id": "UUID",
-  "file_name": "string",
-  "file_hash": "SHA-256",
-  "integrity_score": 0-100,
-  "risk_level": "LOW|MEDIUM|HIGH",
-  "kpis": [ {label, value, status} ],
-  "artifact_block": {
+  "fileInfo": { "name": "string", "size": 123, "type": "application/octet-stream" },
+  "kpis": [{ "id": "kpi-1", "label": "Audit Score", "value": 91.2, "status": "excellent", "trend": "stable" }],
+  "verification": { "status": "Verified", "confidence": 91, "timestamp": "ISO-8601", "checks": [] },
+  "fileHash": "SHA-256",
+  "uploadId": "UUID",
+  "metadata": { "verification_mode": "full" },
+  "artifactBlock": {
     "index": int,
     "tau_vectors": [5 floats],
     "artifact_hash": "SHA-256"
@@ -141,7 +142,8 @@ POST   /api/mint/finalize                   Create NFT on Solana
     "tau_vectors": [0.618, 1.618, 0.381, 0.236, 0.146],
     "manifold_hash": "position_hash",
     "timestamp": "ISO-8601",
-    "previous_hash": "SHA-256"
+    "prev_block_hash": "SHA-256",
+    "block_hash": "SHA-256"
 }
 ```
 
@@ -153,8 +155,8 @@ POST   /api/mint/finalize                   Create NFT on Solana
 | ---------------- | ------------------------- | ----------------------------- |
 | `FileUpload`     | Drag-drop file selector   | `onUploadComplete`, `onError` |
 | `KPIDisplay`     | Show audit results grid   | `kpis`, `riskLevel`, `score`  |
-| `BlockchainInfo` | Display artifact position | `artifactBlock`               |
-| `MintFlow`       | NFT minting wizard        | `uploadId`, `onMintComplete`  |
+| `BlockchainInfo` | Display artifact position | `block`, `chainHeight`        |
+| `MintFlow`       | NFT minting wizard        | `uploadData`                  |
 | `WalletProvider` | Solana wallet setup       | `children`                    |
 
 ---
@@ -274,6 +276,9 @@ REPORT_CACHE_DIR=backend/data/report_cache/
 
 ```
 NEXT_PUBLIC_API_URL=http://localhost:8000
+# Optional gate for mint UI
+NEXT_PUBLIC_ENABLE_NFT=true
+# Documented for forward compatibility (provider currently hardcodes Devnet)
 NEXT_PUBLIC_SOLANA_NETWORK=devnet
 ```
 
@@ -373,5 +378,5 @@ General:
 
 ---
 
-**Last Updated:** March 18, 2026
+**Last Updated:** March 23, 2026
 **Use case:** During development, debugging, deployment

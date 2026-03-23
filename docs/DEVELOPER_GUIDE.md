@@ -48,9 +48,9 @@ User uploads file → Backend processes it → Returns review (KPIs, hash, risk)
 
 - **Small files (< 100 MB)**: Single `POST /api/upload`
 - **Large files (≥ 100 MB)**: Chunked upload
-  - `POST /upload/chunked/init` → get `upload_id`
-  - `PUT /upload/chunked/{id}/chunk/{i}` → upload chunks (20 MB each, 8 parallel)
-  - `POST /upload/chunked/{id}/complete` → start processing
+  - `POST /api/upload/chunked/init` → get `upload_id`
+  - `PUT /api/upload/chunked/{id}/chunk/{i}` → upload chunks (20 MB each, 8 parallel)
+  - `POST /api/upload/chunked/{id}/complete` → start processing
 
 ### Step 2: RIM-OS Audit (the “review engine”)
 
@@ -104,6 +104,12 @@ The backend reads the RIM-OS report and builds:
 - **PDF**: `GET /api/report/{upload_id}/pdf`
 - **HTML**: `GET /api/report/{upload_id}/html`
 - **Penrose SVG**: `GET /api/report/{upload_id}/svg`
+
+### Step 5: Optional NFT Flow
+
+- `POST /api/ipfs/upload` → metadata storage/preparation
+- `POST /api/mint/prepare` → deterministic mint context (`mintHash`, `nftMetadata`)
+- `POST /api/mint/finalize` → persist finalized mint reference
 
 ---
 

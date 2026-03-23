@@ -49,7 +49,7 @@
   "verification": {
     "status": "Verification Failed",
     "confidence": 33,
-    "timestamp": "2026-03-19T12:44:04Z",
+    "timestamp": "2026-03-23T11:29:23Z",
     "checks": [
       "Stage 1 - Schema & Genesis: OK",
       "Stage 2 - Entropy: avg_entropy_bits=2.4056",
@@ -59,7 +59,7 @@
     ]
   },
   "fileHash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
-  "uploadId": "ea645d2a-51aa-49ef-97db-67459d65af6d",
+  "uploadId": "193fdd01-6294-43e5-9e09-b687f3b8e583",
   "metadata": {
     "name": "Audit Report: bad.rim95",
     "description": "Cryptographic audit artifact verified by RIMOS pipeline.",
@@ -76,8 +76,8 @@
     "verification_mode": "full"
   },
   "artifactBlock": {
-    "index": 76,
-    "timestamp": "2026-03-19T12:44:04Z",
+    "index": 87,
+    "timestamp": "2026-03-23T11:29:23Z",
     "artifact_hash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
     "tau_vectors": [
       0.9066624331551252,
@@ -93,8 +93,8 @@
       0.40739204926097644,
       0.32267522322676984
     ],
-    "prev_block_hash": "31c76d402c500f1189d6c0893c92a6d16de4d5dd7a433bd8a1b684752d53beb0",
-    "block_hash": "516e72fde5a12415c3f56d52944e95674f28a0c515caf6689bc6773e7ed3b9b0",
+    "prev_block_hash": "7409537fc81dfd9c9c9d181c8575a72d8a5084701d36e155c60a4b123e5989e7",
+    "block_hash": "47ce0a7a8c6f70239394db95f4d0227a3237adadb1c47d2c9697e4a72c80f295",
     "type": null,
     "anchors": null
   }

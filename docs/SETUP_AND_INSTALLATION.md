@@ -165,9 +165,9 @@ RATE_LIMIT_ENABLED=True
 RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_PERIOD=60
 
-# Solana (for NFT minting)
-SOLANA_RPC_URL=https://api.devnet.solana.com
-SOLANA_NETWORK=devnet
+# Note:
+# Backend does not read SOLANA_RPC_URL / SOLANA_NETWORK in app/config.py.
+# Solana wallet/network settings are frontend-side.
 ```
 
 ### Step 7: Test Backend Installation
@@ -243,7 +243,12 @@ Create `web/.env.local` file:
 # API Configuration
 NEXT_PUBLIC_API_URL=http://localhost:8000
 
+# NFT Feature Flag (optional mint flow toggle in upload page)
+NEXT_PUBLIC_ENABLE_NFT=true
+
 # Solana Configuration
+# NEXT_PUBLIC_SOLANA_NETWORK is currently documented for forward compatibility.
+# WalletProvider currently uses hardcoded Devnet.
 NEXT_PUBLIC_SOLANA_NETWORK=devnet
 NEXT_PUBLIC_SOLANA_RPC_URL=https://api.devnet.solana.com
 
@@ -371,14 +376,19 @@ npm run dev
 **Initialize (if doesn't exist):**
 
 ```json
-{
-    "blocks": [],
-    "genesis_mints": {
-        "fine_structure_constant": 137.0359991,
-        "boltzmann_entropy": 1.380649e-23,
-        "einstein_tensors": [1.0, 0.5, 0.333]
-    }
-}
+[
+  {
+    "index": 0,
+    "type": "GENESIS",
+    "timestamp": "2026-01-01T00:00:00Z",
+    "anchors": [
+      "fine_structure_constant",
+      "einstein_field_equations",
+      "boltzmann_entropy"
+    ],
+    "block_hash": "<sha256>"
+  }
+]
 ```
 
 **Auto-created:** First upload will create this file.
@@ -973,6 +983,6 @@ After setup is complete:
 
 ---
 
-**Last Updated:** March 18, 2026
-**Version:** 1.0
+**Last Updated:** March 23, 2026
+**Version:** 1.1
 **Audience:** New developers setting up RIMOS
