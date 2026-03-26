@@ -293,19 +293,24 @@ def _chain_seed(chain: List[Dict[str, Any]]) -> str:
 
 def _tau_to_tiling_coords(tau_vectors: List[float], global_scale: float = 1.0) -> Tuple[float, float]:
     """
-    Map tau vectors to 2D coordinates on the global manifold viewport.
+    Map tau vector to 2D coordinates via cut-and-project onto E_parallel.
 
-    We project tau[1] and tau[2] as free axes (tau[0]/tau[4] are constrained in
-    upstream geometry construction).
+    Uses the same 5D->2D projection basis as the Penrose construction:
+      x = sum(tau[i] * cos(2*pi*i/5))
+      y = sum(tau[i] * sin(2*pi*i/5))
     """
     if not tau_vectors:
         return (0.0, 0.0)
 
-    tau1 = float(tau_vectors[1]) if len(tau_vectors) > 1 else float(tau_vectors[0])
-    tau2 = float(tau_vectors[2]) if len(tau_vectors) > 2 else float(tau_vectors[0])
-    x = tau1 * PHI * global_scale
-    y = tau2 * PHI * global_scale
-    return (x, y)
+    x = sum(
+        float(tau_vectors[i]) * math.cos(2 * PI * i / 5)
+        for i in range(min(5, len(tau_vectors)))
+    )
+    y = sum(
+        float(tau_vectors[i]) * math.sin(2 * PI * i / 5)
+        for i in range(min(5, len(tau_vectors)))
+    )
+    return (x * global_scale, y * global_scale)
 
 
 def generate_penrose_svg_viewport(
@@ -358,9 +363,8 @@ def generate_penrose_svg_viewport(
     min_y, max_y = min(ys), max(ys)
     span = max(max_x - min_x, max_y - min_y, 0.01)
 
-    artifact_x_rel, artifact_y_rel = _tau_to_tiling_coords(tau_vectors)
-    artifact_x = min_x + (artifact_x_rel % 1.0) * max(max_x - min_x, 0.01)
-    artifact_y = min_y + (artifact_y_rel % 1.0) * max(max_y - min_y, 0.01)
+    # Cut-and-project yields coordinates directly in tiling space.
+    artifact_x, artifact_y = _tau_to_tiling_coords(tau_vectors)
 
     normalized_radius = min(max(viewport_radius, 0.2), 1.0)
     view_span = span * normalized_radius

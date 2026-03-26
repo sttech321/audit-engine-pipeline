@@ -49,17 +49,17 @@
   "verification": {
     "status": "Verification Failed",
     "confidence": 33,
-    "timestamp": "2026-03-13T15:53:25Z",
+    "timestamp": "2026-03-26T18:50:44Z",
     "checks": [
       "Stage 1 - Schema & Genesis: OK",
       "Stage 2 - Entropy: avg_entropy_bits=1.5850",
-      "Stage 3 - Penrose geometry: avg_penrose_match=0.3597",
+      "Stage 3 - Penrose geometry: avg_penrose_match=0.3579",
       "Stage 4 - Anomalies: anomaly_fraction=0.0000, count=0",
       "Stage 5 - Risk: risk_level=HIGH"
     ]
   },
   "fileHash": "9a049b03f6fc40bfcf2f136320359257ed4af8513f71aa6fef47f17059bbae23",
-  "uploadId": "60b47669-cb87-47a3-9a89-fd06b5265bea",
+  "uploadId": "df1519c3-4ff2-4a03-9988-d2cb30264198",
   "metadata": {
     "name": "Audit Report: bad_signature_test.rim95",
     "description": "Cryptographic audit artifact verified by RIMOS pipeline.",
@@ -76,25 +76,25 @@
     "verification_mode": "full"
   },
   "artifactBlock": {
-    "index": 47,
-    "timestamp": "2026-03-13T15:53:25Z",
+    "index": 94,
+    "timestamp": "2026-03-26T18:50:44Z",
     "artifact_hash": "9a049b03f6fc40bfcf2f136320359257ed4af8513f71aa6fef47f17059bbae23",
     "tau_vectors": [
       0.9595022904564202,
       0.11393855018660615,
       0.8827999014620592,
       0.2702600730737822,
-      0.783408807982012
+      0.5157963613698588
     ],
     "manifold_hash": "3f51be253eb47e6f9cc3597562a5c37451213694e53f5ceee186e873f8a58839",
-    "tile_hash": "34e55ca0ae489308c5561ed1a9f432090e9c9be6bbb14a619d93cc0b41e6ad75",
+    "tile_hash": "fb1a73acf4203bcd4e35ffd524310f3bd08b5a1579c710d673ea17422be6d3a8",
     "barycentric": [
-      0.2929309521393381,
-      0.30737667593049717,
-      0.3996923719301646
+      0.3254034065638785,
+      0.3226187820470019,
+      0.35197781138911954
     ],
-    "prev_block_hash": "a1746833b59c549b0852b05b3a34cb1febb0d984c9facfc49f08f740691e4810",
-    "block_hash": "5b83388ec4762ed4cd984688790265cb9cf872985249852be77185b28ab7e9b5",
+    "prev_block_hash": "6721e074d40909a3e84f57a6673cf1546af8d5a8c024dca8af0bf3c1a61d6d41",
+    "block_hash": "13b64d66edadbc5c697e38edefeafb008b9fb098eaecafb4c4d608518a5ddaac",
     "type": null,
     "anchors": null
   }
