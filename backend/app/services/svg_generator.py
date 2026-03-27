@@ -365,22 +365,39 @@ def generate_penrose_svg_viewport(
 
     # Cut-and-project yields coordinates directly in tiling space.
     artifact_x, artifact_y = _tau_to_tiling_coords(tau_vectors)
+    display_x, display_y = artifact_x, artifact_y
 
     normalized_radius = min(max(viewport_radius, 0.2), 1.0)
     view_span = span * normalized_radius
-    scale = (SVG_WIDTH * 0.88) / max(view_span, 0.01)
-    cx_off = SVG_CENTER_X - artifact_x * scale
-    cy_off = SVG_CENTER_Y - artifact_y * scale
-
     half_span = view_span * 0.55
+
     visible_rhombi = [
         r
         for r in rhombi
-        if abs(r["center"].real - artifact_x) < half_span
-        and abs(r["center"].imag - artifact_y) < half_span
+        if abs(r["center"].real - display_x) < half_span
+        and abs(r["center"].imag - display_y) < half_span
     ]
     if len(visible_rhombi) < 20:
-        visible_rhombi = rhombi
+        # If projected point lands in sparse/off-edge space, snap viewport center
+        # to nearest tile center to keep context visible while preserving marker semantics.
+        nearest = min(
+            rhombi,
+            key=lambda r: (r["center"].real - artifact_x) ** 2 + (r["center"].imag - artifact_y) ** 2,
+        )
+        display_x = nearest["center"].real
+        display_y = nearest["center"].imag
+        visible_rhombi = [
+            r
+            for r in rhombi
+            if abs(r["center"].real - display_x) < half_span
+            and abs(r["center"].imag - display_y) < half_span
+        ]
+        if len(visible_rhombi) < 20:
+            visible_rhombi = rhombi
+
+    scale = (SVG_WIDTH * 0.88) / max(view_span, 0.01)
+    cx_off = SVG_CENTER_X - display_x * scale
+    cy_off = SVG_CENTER_Y - display_y * scale
 
     gradient_defs = []
     for i, base in enumerate(TILE_BASE_COLORS):
@@ -415,7 +432,7 @@ def generate_penrose_svg_viewport(
             hashlib.sha256((global_seed + str(i)).encode()).digest()[0] + sector
         ) % len(TILE_BASE_COLORS)
         path = _path_from_complex_verts(rhombus["vertices"], cx_off, cy_off, scale)
-        dist = abs(rhombus["center"].real - artifact_x) + abs(rhombus["center"].imag - artifact_y)
+        dist = abs(rhombus["center"].real - display_x) + abs(rhombus["center"].imag - display_y)
         opacity = 1.0 if dist < view_span * 0.15 else 0.76
         svg.append(
             f'    <path d="{path}" fill="url(#gv{color_idx})" stroke="#000" stroke-width="0.4" fill-opacity="{opacity:.2f}"/>'

@@ -124,6 +124,7 @@ def _generate_chain_view_svg(cached: ExtendedAuditResult) -> Optional[str]:
             penrose_data=penrose_data,
             chain=chain,
             risk_level=cached.risk_badge.level.value,
+            viewport_radius=0.9,
         )
     except Exception as exc:
         logger.warning(
