@@ -10,7 +10,8 @@ RIMOS Spec Compliant:
 import hashlib
 import json
 import math
-from typing import Dict, Any, List, Tuple
+from collections import defaultdict
+from typing import Dict, Any, List, Optional, Tuple
 
 # ─── Penrose P3 Constants ────────────────────────────────────────────────────
 
@@ -45,6 +46,138 @@ RISK_COLORS = {
     "HIGH": "#f97316",
     "CRITICAL": "#ef4444",
 }
+
+# SVG-VIS-003: mint anchor in tiling bbox (avoids inflation star zone)
+MINT_BBOX_MARGIN = 0.15
+# τ-window for rhombus signature (cut-and-project match to audit τ)
+MINT_TAU_WINDOW_DELTA = 0.12
+# Viewport fraction of tiling span (SVG-VIS-003 §7: 0.35–0.40 for density without star-artifact zone)
+DEFAULT_VIEWPORT_RADIUS = 0.38
+# Fraction of view_span used as half-extent of the visible window (higher → more tiles, more star formations)
+VIEWPORT_HALF_SPAN_FACTOR = 0.68
+
+# "reference" = light field + star-hub colors (client mockup). "spec" = SVG-VIS-003 dimmed manifold + gold τ.
+VIEWPORT_VISUAL_THEME_REFERENCE = "reference"
+VIEWPORT_VISUAL_THEME_SPEC = "spec"
+DEFAULT_VIEWPORT_VISUAL_THEME = VIEWPORT_VISUAL_THEME_REFERENCE
+
+def _genesis_tau_vector(anchor_key: str) -> List[float]:
+    """Deterministic 5D τ for Genesis anchors (c, ℏ, G) — stable across runs."""
+    d = hashlib.sha256(f"RIMOS_GENESIS|{anchor_key}".encode()).digest()
+    return [((d[i] + d[(i + 5) % 32]) % 256) / 255.0 for i in range(5)]
+
+
+_GENESIS_CLUSTER: List[Tuple[str, str]] = [
+    ("c", "c"),
+    ("ℏ", "hbar"),
+    ("G", "G"),
+]
+
+
+def _frac01(x: float) -> float:
+    v = x - math.floor(x)
+    return v if v >= 0.0 else v + 1.0
+
+
+def _tau5_pad(tau: List[float]) -> List[float]:
+    out = [float(tau[i]) for i in range(min(5, len(tau)))]
+    while len(out) < 5:
+        out.append(0.5)
+    return out
+
+
+def _circular_dist_torus(a: float, b: float) -> float:
+    fa, fb = _frac01(a), _frac01(b)
+    diff = abs(fa - fb)
+    if diff > 0.5:
+        diff = 1.0 - diff
+    return diff
+
+
+def _p5_from_center(cx: float, cy: float) -> List[float]:
+    """de Bruijn / cut-and-project 5D fractional coords for rhombus center (SVG-VIS-003)."""
+    p5: List[float] = []
+    for k in range(5):
+        v = cx * math.cos(2 * PI * k / 5) + cy * math.sin(2 * PI * k / 5)
+        p5.append(_frac01(v))
+    return p5
+
+
+def _rhombus_in_tau_signature(p5: List[float], tau: List[float], delta: float) -> bool:
+    tau5 = _tau5_pad(tau)
+    for k in range(5):
+        if _circular_dist_torus(p5[k], tau5[k]) > delta:
+            return False
+    return True
+
+
+def _vertex_key(v: complex) -> Tuple[float, float]:
+    return (round(v.real, 5), round(v.imag, 5))
+
+
+def _penrose_star_hub_centers(rhombi: List[Dict[str, Any]]) -> List[Tuple[float, float]]:
+    """Vertices where five thick rhombi meet (local five-fold star hubs on P3)."""
+    vert_rhombi: Dict[Tuple[float, float], List[int]] = defaultdict(list)
+    for ri, r in enumerate(rhombi):
+        for v in r["vertices"]:
+            vert_rhombi[_vertex_key(v)].append(ri)
+    hubs: List[Tuple[float, float]] = []
+    for key, r_indices in vert_rhombi.items():
+        if len(r_indices) != 5:
+            continue
+        uniq = set(r_indices)
+        if len(uniq) != 5:
+            continue
+        if all(rhombi[i]["type"] == "thick" for i in uniq):
+            hubs.append((key[0], key[1]))
+    return hubs
+
+
+def _star_hub_tile_fills(rhombi: List[Dict[str, Any]], global_seed: str) -> Dict[int, str]:
+    """Thick rhombi in a 5-thick star: magenta vs pale gold (deterministic per hub)."""
+    magenta = "#d946ef"
+    pale_gold = "#fcd34d"
+    fills: Dict[int, str] = {}
+    for hx, hy in _penrose_star_hub_centers(rhombi):
+        key = (round(hx, 5), round(hy, 5))
+        indices: List[int] = []
+        for ri, r in enumerate(rhombi):
+            if r["type"] != "thick":
+                continue
+            for v in r["vertices"]:
+                if _vertex_key(v) == key:
+                    indices.append(ri)
+                    break
+        if len(indices) != 5:
+            continue
+        hbyte = hashlib.sha256(f"{global_seed}|{hx:.5f}|{hy:.5f}".encode()).digest()[0]
+        color = magenta if (hbyte % 2 == 0) else pale_gold
+        for ri in indices:
+            fills.setdefault(ri, color)
+    return fills
+
+
+def _mint_anchor_from_tau_bbox(
+    tau_vectors: List[float],
+    min_x: float,
+    max_x: float,
+    min_y: float,
+    max_y: float,
+) -> Tuple[float, float]:
+    """
+    Map τ[0], τ[1] into tiling bbox with margin (avoids inflation star zone).
+    No modulo on derived artifact coordinates — only τ inputs drive interpolation.
+    """
+    t0 = float(tau_vectors[0]) if len(tau_vectors) > 0 else 0.5
+    t1 = float(tau_vectors[1]) if len(tau_vectors) > 1 else 0.5
+    t0 = min(1.0, max(0.0, t0))
+    t1 = min(1.0, max(0.0, t1))
+    m = MINT_BBOX_MARGIN
+    span_x = max_x - min_x
+    span_y = max_y - min_y
+    x = min_x + (m + t0 * (1.0 - 2.0 * m)) * span_x
+    y = min_y + (m + t1 * (1.0 - 2.0 * m)) * span_y
+    return (x, y)
 
 
 def _sun_seed() -> List[Tuple[int, complex, complex, complex]]:
@@ -291,58 +424,32 @@ def _chain_seed(chain: List[Dict[str, Any]]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _tau_to_tiling_coords(tau_vectors: List[float], global_scale: float = 1.0) -> Tuple[float, float]:
-    """
-    Map tau vector to 2D coordinates via cut-and-project onto E_parallel.
-
-    Uses the same 5D->2D projection basis as the Penrose construction:
-      x = sum(tau[i] * cos(2*pi*i/5))
-      y = sum(tau[i] * sin(2*pi*i/5))
-    """
-    if not tau_vectors:
-        return (0.0, 0.0)
-
-    x = sum(
-        float(tau_vectors[i]) * math.cos(2 * PI * i / 5)
-        for i in range(min(5, len(tau_vectors)))
-    )
-    y = sum(
-        float(tau_vectors[i]) * math.sin(2 * PI * i / 5)
-        for i in range(min(5, len(tau_vectors)))
-    )
-    return (x * global_scale, y * global_scale)
-
-
 def generate_penrose_svg_viewport(
     penrose_data: Dict[str, Any],
     chain: List[Dict[str, Any]],
     risk_level: str = "LOW",
-    viewport_radius: float = 0.6,
+    viewport_radius: float = DEFAULT_VIEWPORT_RADIUS,
     show_labels: bool = True,
+    tau_window_delta: Optional[float] = None,
+    visual_theme: str = DEFAULT_VIEWPORT_VISUAL_THEME,
 ) -> str:
     """
-    Render a chain-anchored viewport cutout of the global Penrose tiling.
+    Render a viewport on the single global Penrose P3 tiling M (chain seed).
 
-    Unlike generate_penrose_svg(), this does not treat each artifact as an
-    isolated universe. The chain defines one global tiling, and the artifact is
-    rendered as a marked position within that shared manifold.
+    Underlying geometry is Penrose P3–type rhombi from inflation (true P3 / de Bruijn dual).
+    visual_theme "reference": light paper field, star hubs (magenta/pale gold), τ signature gold — client mockup.
+    visual_theme "spec": SVG-VIS-003 dimmed manifold + gold τ + Genesis (§4.4).
     """
     global_seed = _chain_seed(chain)
     risk_color = RISK_COLORS.get(risk_level, RISK_COLORS["LOW"])
     sector = int(penrose_data.get("sector", 0))
     penrose_hash = str(penrose_data.get("penrose_hash", ""))[:16]
     chain_len = len(chain or [])
-
-    rhombi = _inflate_penrose(global_seed, iterations=6)
-    if not rhombi:
-        rhombi = _inflate_penrose(global_seed + "fallback", iterations=5)
-    if not rhombi:
-        return generate_penrose_svg(
-            penrose_data=penrose_data,
-            risk_level=risk_level,
-            show_labels=show_labels,
-            show_hash=True,
-        )
+    delta = (
+        MINT_TAU_WINDOW_DELTA
+        if tau_window_delta is None
+        else min(max(tau_window_delta, 1e-6), 0.49)
+    )
 
     tau_raw = penrose_data.get("tau_vectors", penrose_data.get("tau", [0.5]))
     if not isinstance(tau_raw, list):
@@ -357,50 +464,70 @@ def generate_penrose_svg_viewport(
     if not tau_vectors:
         tau_vectors = [0.5]
 
+    theme = (
+        penrose_data.get("viewport_visual_theme")
+        or visual_theme
+        or DEFAULT_VIEWPORT_VISUAL_THEME
+    )
+    if theme not in (VIEWPORT_VISUAL_THEME_REFERENCE, VIEWPORT_VISUAL_THEME_SPEC):
+        theme = VIEWPORT_VISUAL_THEME_REFERENCE
+
+    # One global tiling from chain — shared manifold M (does not vary per mint).
+    rhombi: List[Dict[str, Any]] = _inflate_penrose(global_seed, iterations=6)
+    if not rhombi:
+        rhombi = _inflate_penrose(global_seed + "|fallback", iterations=5)
+    if not rhombi:
+        return generate_penrose_svg(
+            penrose_data=penrose_data,
+            risk_level=risk_level,
+            show_labels=show_labels,
+            show_hash=True,
+        )
+
+    for r in rhombi:
+        cx = r["center"].real
+        cy = r["center"].imag
+        r["p5"] = _p5_from_center(cx, cy)
+
     xs = [r["center"].real for r in rhombi]
     ys = [r["center"].imag for r in rhombi]
     min_x, max_x = min(xs), max(xs)
     min_y, max_y = min(ys), max(ys)
     span = max(max_x - min_x, max_y - min_y, 0.01)
 
-    # Cut-and-project yields coordinates directly in tiling space.
-    artifact_x, artifact_y = _tau_to_tiling_coords(tau_vectors)
+    artifact_x, artifact_y = _mint_anchor_from_tau_bbox(
+        tau_vectors, min_x, max_x, min_y, max_y
+    )
     display_x, display_y = artifact_x, artifact_y
 
     normalized_radius = min(max(viewport_radius, 0.2), 1.0)
     view_span = span * normalized_radius
-    half_span = view_span * 0.55
+    half_span = view_span * VIEWPORT_HALF_SPAN_FACTOR
 
-    visible_rhombi = [
-        r
-        for r in rhombi
+    visible_indices = [
+        i
+        for i, r in enumerate(rhombi)
         if abs(r["center"].real - display_x) < half_span
         and abs(r["center"].imag - display_y) < half_span
     ]
-    if len(visible_rhombi) < 20:
-        # If projected point lands in sparse/off-edge space, snap viewport center
-        # to nearest tile center to keep context visible while preserving marker semantics.
-        nearest = min(
-            rhombi,
-            key=lambda r: (r["center"].real - artifact_x) ** 2 + (r["center"].imag - artifact_y) ** 2,
-        )
-        display_x = nearest["center"].real
-        display_y = nearest["center"].imag
-        visible_rhombi = [
-            r
-            for r in rhombi
+    if len(visible_indices) < 20:
+        view_span = min(span * 1.6, view_span * 2.2)
+        half_span = view_span * VIEWPORT_HALF_SPAN_FACTOR
+        visible_indices = [
+            i
+            for i, r in enumerate(rhombi)
             if abs(r["center"].real - display_x) < half_span
             and abs(r["center"].imag - display_y) < half_span
         ]
-        if len(visible_rhombi) < 20:
-            visible_rhombi = rhombi
 
     scale = (SVG_WIDTH * 0.88) / max(view_span, 0.01)
     cx_off = SVG_CENTER_X - display_x * scale
     cy_off = SVG_CENTER_Y - display_y * scale
 
+    gold_fill = "#fbbf24"
+
     gradient_defs = []
-    for i, base in enumerate(TILE_BASE_COLORS):
+    for gi, base in enumerate(TILE_BASE_COLORS):
         hex_val = base.lstrip("#")
         red = int(hex_val[0:2], 16) / 255
         green = int(hex_val[2:4], 16) / 255
@@ -408,47 +535,152 @@ def generate_penrose_svg_viewport(
         light = f"rgb({int(min(255, red * 255 * 1.35))},{int(min(255, green * 255 * 1.35))},{int(min(255, blue * 255 * 1.35))})"
         dark = f"rgb({int(max(0, red * 255 * 0.75))},{int(max(0, green * 255 * 0.75))},{int(max(0, blue * 255 * 0.75))})"
         gradient_defs.append(
-            f'    <linearGradient id="gv{i}" x1="0%" y1="0%" x2="100%" y2="100%">'
+            f'    <linearGradient id="gv{gi}" x1="0%" y1="0%" x2="100%" y2="100%">'
             f'<stop offset="0%" style="stop-color:{light}"/>'
             f'<stop offset="100%" style="stop-color:{dark}"/>'
             f"</linearGradient>"
         )
 
+    if theme == VIEWPORT_VISUAL_THEME_REFERENCE:
+        bg_stops = (
+            '      <stop offset="0%" style="stop-color:#ebe3d4"/>',
+            '      <stop offset="100%" style="stop-color:#e0d4bc"/>',
+        )
+        defs_inner = ["  <defs>", '    <linearGradient id="bgv" x1="0%" y1="0%" x2="100%" y2="100%">', *bg_stops, "    </linearGradient>", "  </defs>"]
+    else:
+        bg_stops = (
+            '      <stop offset="0%" style="stop-color:#0f172a"/>',
+            '      <stop offset="100%" style="stop-color:#1e293b"/>',
+        )
+        defs_inner = [
+            "  <defs>",
+            '    <linearGradient id="bgv" x1="0%" y1="0%" x2="100%" y2="100%">',
+            *bg_stops,
+            "    </linearGradient>",
+            *gradient_defs,
+            "  </defs>",
+        ]
+
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}" width="{SVG_WIDTH}" height="{SVG_HEIGHT}">',
-        "  <defs>",
-        '    <linearGradient id="bgv" x1="0%" y1="0%" x2="100%" y2="100%">',
-        '      <stop offset="0%" style="stop-color:#0f172a"/>',
-        '      <stop offset="100%" style="stop-color:#1e293b"/>',
-        "    </linearGradient>",
-        *gradient_defs,
-        "  </defs>",
+        *defs_inner,
         '  <rect width="100%" height="100%" fill="url(#bgv)"/>',
         '  <g id="tiles">',
     ]
 
-    for i, rhombus in enumerate(visible_rhombi):
-        color_idx = (
-            hashlib.sha256((global_seed + str(i)).encode()).digest()[0] + sector
-        ) % len(TILE_BASE_COLORS)
+    star_fills: Dict[int, str] = {}
+    if theme == VIEWPORT_VISUAL_THEME_REFERENCE:
+        star_fills = _star_hub_tile_fills(rhombi, global_seed)
+
+    base_fill_ref = "#c9b89a"
+    base_stroke_ref = "#4a3f36"
+
+    # Non–τ-signature tiles
+    for ri in visible_indices:
+        rhombus = rhombi[ri]
+        p5 = rhombus.get("p5")
+        if p5 is None:
+            p5 = _p5_from_center(rhombus["center"].real, rhombus["center"].imag)
+        if _rhombus_in_tau_signature(p5, tau_vectors, delta):
+            continue
         path = _path_from_complex_verts(rhombus["vertices"], cx_off, cy_off, scale)
-        dist = abs(rhombus["center"].real - display_x) + abs(rhombus["center"].imag - display_y)
-        opacity = 1.0 if dist < view_span * 0.15 else 0.76
+        if theme == VIEWPORT_VISUAL_THEME_REFERENCE:
+            fill = star_fills.get(ri, base_fill_ref)
+            svg.append(
+                f'    <path d="{path}" fill="{fill}" stroke="{base_stroke_ref}" '
+                f'stroke-width="0.5" fill-opacity="0.94"/>'
+            )
+        else:
+            color_idx = (
+                hashlib.sha256((global_seed + str(ri)).encode()).digest()[0] + sector
+            ) % len(TILE_BASE_COLORS)
+            svg.append(
+                f'    <path d="{path}" fill="url(#gv{color_idx})" stroke="#334155" '
+                f'stroke-width="0.4" fill-opacity="0.18"/>'
+            )
+
+    # τ signature (gold + risk stroke)
+    for ri in visible_indices:
+        rhombus = rhombi[ri]
+        p5 = rhombus.get("p5")
+        if p5 is None:
+            p5 = _p5_from_center(rhombus["center"].real, rhombus["center"].imag)
+        if not _rhombus_in_tau_signature(p5, tau_vectors, delta):
+            continue
+        path = _path_from_complex_verts(rhombus["vertices"], cx_off, cy_off, scale)
+        sw = "1.05" if theme == VIEWPORT_VISUAL_THEME_REFERENCE else "1.2"
+        fo = "0.82" if theme == VIEWPORT_VISUAL_THEME_REFERENCE else "0.82"
         svg.append(
-            f'    <path d="{path}" fill="url(#gv{color_idx})" stroke="#000" stroke-width="0.4" fill-opacity="{opacity:.2f}"/>'
+            f'    <path d="{path}" fill="{gold_fill}" stroke="{risk_color}" '
+            f'stroke-width="{sw}" fill-opacity="{fo}"/>'
         )
 
     marker_x = SVG_CENTER_X
     marker_y = SVG_CENTER_Y
-    marker_r = 8
+    marker_r = 5 if theme == VIEWPORT_VISUAL_THEME_REFERENCE else 8
 
+    # Genesis cluster: faint markers in-view or direction ticks at rim
+    rim = min(SVG_WIDTH, SVG_HEIGHT) * 0.42
+    for label, gkey in _GENESIS_CLUSTER:
+        gt = _genesis_tau_vector(gkey)
+        gx, gy = _mint_anchor_from_tau_bbox(gt, min_x, max_x, min_y, max_y)
+        in_win = (
+            abs(gx - display_x) < half_span * 1.02
+            and abs(gy - display_y) < half_span * 1.02
+        )
+        sx = cx_off + gx * scale
+        sy = cy_off + gy * scale
+        if in_win and 0 <= sx <= SVG_WIDTH and 0 <= sy <= SVG_HEIGHT:
+            if theme == VIEWPORT_VISUAL_THEME_REFERENCE:
+                svg.append(
+                    f'    <circle cx="{sx:.1f}" cy="{sy:.1f}" r="3.5" fill="#a8a29e" '
+                    f'stroke="#57534e" stroke-width="0.65" fill-opacity="0.55"/>'
+                )
+                svg.append(
+                    f'    <text x="{sx:.1f}" y="{sy + 1.2:.1f}" text-anchor="middle" '
+                    f'fill="#44403c" font-size="7" font-weight="600">{label}</text>'
+                )
+            else:
+                svg.append(
+                    f'    <circle cx="{sx:.1f}" cy="{sy:.1f}" r="3.5" fill="#e2e8f0" '
+                    f'stroke="#64748b" stroke-width="0.6" fill-opacity="0.35"/>'
+                )
+                svg.append(
+                    f'    <text x="{sx:.1f}" y="{sy + 1.2:.1f}" text-anchor="middle" '
+                    f'fill="#94a3b8" font-size="7" font-weight="600">{label}</text>'
+                )
+        else:
+            dx = gx - display_x
+            dy = gy - display_y
+            dist = math.hypot(dx, dy)
+            if dist < 1e-9:
+                continue
+            ux, uy = dx / dist, dy / dist
+            x2 = marker_x + ux * rim
+            y2 = marker_y + uy * rim
+            gc = "#57534e" if theme == VIEWPORT_VISUAL_THEME_REFERENCE else "#475569"
+            svg.append(
+                f'    <line x1="{marker_x:.1f}" y1="{marker_y:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                f'stroke="{gc}" stroke-width="0.5" stroke-dasharray="2 2" opacity="0.55"/>'
+            )
+            tx = marker_x + ux * (rim + 12)
+            ty = marker_y + uy * (rim + 12)
+            tc = "#44403c" if theme == VIEWPORT_VISUAL_THEME_REFERENCE else "#64748b"
+            svg.append(
+                f'    <text x="{tx:.1f}" y="{ty:.1f}" text-anchor="middle" fill="{tc}" '
+                f'font-size="7" opacity="0.85">{label}</text>'
+            )
+
+    cross = 10 if theme == VIEWPORT_VISUAL_THEME_REFERENCE else 14
+    m_opacity = "0.55" if theme == VIEWPORT_VISUAL_THEME_REFERENCE else "0.4"
+    fill_op = "0.75" if theme == VIEWPORT_VISUAL_THEME_REFERENCE else "0.9"
     svg.extend(
         [
             "  </g>",
-            f'  <circle cx="{marker_x}" cy="{marker_y}" r="{marker_r + 4}" fill="none" stroke="{risk_color}" stroke-width="1.5" opacity="0.4"/>',
-            f'  <circle cx="{marker_x}" cy="{marker_y}" r="{marker_r}" fill="{risk_color}" fill-opacity="0.9" stroke="white" stroke-width="1"/>',
-            f'  <line x1="{marker_x - 14}" y1="{marker_y}" x2="{marker_x + 14}" y2="{marker_y}" stroke="{risk_color}" stroke-width="0.8" opacity="0.6"/>',
-            f'  <line x1="{marker_x}" y1="{marker_y - 14}" x2="{marker_x}" y2="{marker_y + 14}" stroke="{risk_color}" stroke-width="0.8" opacity="0.6"/>',
+            f'  <circle cx="{marker_x}" cy="{marker_y}" r="{marker_r + 4}" fill="none" stroke="{risk_color}" stroke-width="1.5" opacity="{m_opacity}"/>',
+            f'  <circle cx="{marker_x}" cy="{marker_y}" r="{marker_r}" fill="{risk_color}" fill-opacity="{fill_op}" stroke="white" stroke-width="1"/>',
+            f'  <line x1="{marker_x - cross}" y1="{marker_y}" x2="{marker_x + cross}" y2="{marker_y}" stroke="{risk_color}" stroke-width="0.8" opacity="0.6"/>',
+            f'  <line x1="{marker_x}" y1="{marker_y - cross}" x2="{marker_x}" y2="{marker_y + cross}" stroke="{risk_color}" stroke-width="0.8" opacity="0.6"/>',
             f'  <rect x="{SVG_WIDTH - 55}" y="15" width="45" height="20" rx="10" fill="{risk_color}" fill-opacity="0.9"/>',
             f'  <text x="{SVG_WIDTH - 32}" y="29" text-anchor="middle" fill="white" font-size="10" font-weight="bold">{risk_level}</text>',
         ]
@@ -457,10 +689,12 @@ def generate_penrose_svg_viewport(
     if show_labels:
         tau_preview = ",".join(f"{value:.3f}" for value in tau_vectors[:3])
         tau_label = f"τ=[{tau_preview}{'...' if len(tau_vectors) > 3 else ''}]"
+        c1 = "#57534e" if theme == VIEWPORT_VISUAL_THEME_REFERENCE else "#94a3b8"
+        c2 = "#44403c" if theme == VIEWPORT_VISUAL_THEME_REFERENCE else "#475569"
         svg.extend(
             [
-                f'  <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="#94a3b8" font-size="9">Global M · Chain={chain_len} blocks</text>',
-                f'  <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT - 10}" text-anchor="middle" fill="#475569" font-size="8">{tau_label} · {penrose_hash}</text>',
+                f'  <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="{c1}" font-size="9">Global M · Chain={chain_len} blocks · δ={delta:.2f}</text>',
+                f'  <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT - 10}" text-anchor="middle" fill="{c2}" font-size="8">{tau_label} · {penrose_hash}</text>',
             ]
         )
 
