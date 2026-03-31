@@ -317,322 +317,214 @@ def generate_penrose_svg_viewport(
     if theme not in (VIEWPORT_VISUAL_THEME_REFERENCE, VIEWPORT_VISUAL_THEME_SPEC):
         theme = VIEWPORT_VISUAL_THEME_REFERENCE
 
-    # ── Resolution grows with chain length ──────────────────────────────────
-    N = 6 + min(3, int(math.log10(max(1, chain_len))))
+    # ======================================================================
+    # NEW VIEWPORT PIPELINE (SVG-VIS-004+005) — strict τ geometry
+    #
+    # Legacy viewport system exists above in history but is fully bypassed:
+    # - NO inflation tiling
+    # - NO τ projections / masks
+    # - NO adjacency / scoring logic
+    # ======================================================================
 
-    # ── Global Penrose P3 field (inflation patch, cached) ───────────────────
-    # Revert to the last “closer” implementation: full-canvas aperiodic field.
-    field_cache = getattr(generate_penrose_svg_viewport, "_p3_cache_v9", None)
-    if field_cache is None:
-        raw_field = _inflate_penrose("RIMOS_P3_GLOBAL_FIELD_V2", iterations=10)
-        if not raw_field:
-            return generate_penrose_svg(
-                penrose_data=penrose_data,
-                risk_level=risk_level,
-                show_labels=show_labels,
-                show_hash=True,
-            )
-
-        edge_lens: List[float] = []
-        for r in raw_field[:1200]:
-            vs = r.get("vertices") or []
-            if len(vs) == 4:
-                edge_lens.append(abs(vs[1] - vs[0]))
-        edge_lens.sort()
-        med = edge_lens[len(edge_lens) // 2] if edge_lens else 1.0
-        factor = 1.0 / max(med, 1e-9)
-
-        tmp: List[Dict[str, Any]] = []
-        for r in raw_field:
-            vs = r.get("vertices") or []
+    def _estimate_tile_size_from_tiles(tiles0: List[Dict[str, Any]]) -> float:
+        # Median edge length across a sample of tiles; robust enough for tolerance + scale.
+        edges: List[float] = []
+        for t in tiles0[:500]:
+            vs = t.get("v") or []
             if len(vs) != 4:
                 continue
-            scaled_vs = [v * factor for v in vs]
-            center = r.get("center", sum(vs) / 4) * factor
-            cx, cy = center.real, center.imag
-            scaled_vs.sort(key=lambda v: math.atan2(v.imag - cy, v.real - cx))
-            tmp.append({"type": r.get("type", "thick"), "vertices": scaled_vs, "center": center})
+            for a, b in zip(vs, vs[1:] + vs[:1]):
+                edges.append(math.hypot(a[0] - b[0], a[1] - b[1]))
+        edges.sort()
+        return edges[len(edges) // 2] if edges else 1.0
 
-        rot = math.radians(23.0)
-        cr = math.cos(rot)
-        sr = math.sin(rot)
+    def _tile_path_raw(t: Dict[str, Any], cx_off0: float, cy_off0: float, scale0: float) -> Optional[str]:
+        # Enforce a valid rhombus: exactly 4 unique vertices, cyclic order.
+        vs = t.get("v") or []
+        if len(vs) != 4:
+            return None
+        uniq = {(round(v[0], 10), round(v[1], 10)) for v in vs}
+        if len(uniq) != 4:
+            return None
+        cx0 = float(t["cx"])
+        cy0 = float(t["cy"])
+        vs0 = list(uniq)
+        vs0.sort(key=lambda p: math.atan2(p[1] - cy0, p[0] - cx0))
+        pts = [(cx_off0 + v[0] * scale0, cy_off0 + v[1] * scale0) for v in vs0]
+        d = f"M {pts[0][0]:.2f},{pts[0][1]:.2f}"
+        for px, py in pts[1:]:
+            d += f" L {px:.2f},{py:.2f}"
+        return d + " Z"
 
-        def _rot(z: complex) -> complex:
-            return complex(z.real * cr - z.imag * sr, z.real * sr + z.imag * cr)
+    # ── GLOBAL MAP M (build once) ───────────────────────────────────────────
+    global_tiles = getattr(generate_penrose_svg_viewport, "_p3_global_tiles_v1", None)
+    if global_tiles is None:
+        tau_genesis = genesis_combined_tau()
+        global_tiles = penrose_patch_raw(tau_genesis, N=7)
+        setattr(generate_penrose_svg_viewport, "_p3_global_tiles_v1", global_tiles)
 
-        centers = [r["center"] for r in tmp]
-        xs = [c.real for c in centers]
-        ys = [c.imag for c in centers]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-
-        cand_xy = [
-            (0.25, 0.25),
-            (0.25, 0.50),
-            (0.25, 0.75),
-            (0.50, 0.25),
-            (0.50, 0.50),
-            (0.50, 0.75),
-            (0.75, 0.25),
-            (0.75, 0.50),
-            (0.75, 0.75),
-        ]
-        candidates: List[complex] = []
-        for qx, qy in cand_xy:
-            tx = min_x * (1 - qx) + max_x * qx
-            ty = min_y * (1 - qy) + max_y * qy
-            candidates.append(
-                min(tmp, key=lambda r: (r["center"].real - tx) ** 2 + (r["center"].imag - ty) ** 2)["center"]
-            )
-
-        def _build_field(anchor: complex) -> List[Dict[str, Any]]:
-            out: List[Dict[str, Any]] = []
-            for r in tmp:
-                out.append(
-                    {
-                        "type": r["type"],
-                        "vertices": [_rot(v - anchor) for v in r["vertices"]],
-                        "center": _rot(r["center"] - anchor),
-                    }
-                )
-            return out
-
-        best_field: Optional[List[Dict[str, Any]]] = None
-        best_score = -1.0
-        for a in candidates:
-            cand_field = _build_field(a)
-            hubs = _penrose_star_hub_centers(cand_field)
-            clear = min(math.hypot(hx, hy) for hx, hy in hubs) if hubs else 999.0
-            score = clear - 0.02 * abs(_rot(a))
-            if score > best_score:
-                best_score = score
-                best_field = cand_field
-
-        field_cache = best_field or _build_field(candidates[0])
-
-        # NOTE: Do NOT perform a second “hub-free re-anchor” here.
-        # That step can move the origin close to the finite field boundary,
-        # producing mostly-empty viewports. We rely on the initial anchor
-        # selection above to keep the origin away from hubs without drifting
-        # to the edge.
-        setattr(generate_penrose_svg_viewport, "_p3_cache_v9", field_cache)
-
-    rhombi: List[Dict[str, Any]] = field_cache
-
-    # ── Tile size calibration (25–50px target) ──────────────────────────────
-    edge_lens2: List[float] = []
-    for r in rhombi[:800]:
-        vs = r["vertices"]
-        if len(vs) == 4:
-            edge_lens2.append(abs(vs[1] - vs[0]))
-    edge_lens2.sort()
-    med_edge = edge_lens2[len(edge_lens2) // 2] if edge_lens2 else 1.0
-    target_px = 34.0
-    scale = max(10.0, min(120.0, target_px / max(med_edge, 1e-6)))
-    half = (SVG_WIDTH / (2 * scale)) * 1.10
-
-    tau5_norm = [(float(tau_vectors[k]) if k < len(tau_vectors) else 0.5) % 1.0 for k in range(5)]
-
-    def _tau_to_xy(tau5: List[float]) -> Tuple[float, float]:
-        dx = 0.0
-        dy = 0.0
-        for k in range(5):
-            v = float(tau5[k] if k < len(tau5) else 0.5) - 0.5
-            dx += v * math.cos(2 * math.pi * k / 5)
-            dy += v * math.sin(2 * math.pi * k / 5)
-        return (dx, dy)
-
-    dx, dy = _tau_to_xy(tau5_norm)
-    gain = half * 0.90
-    vp_x = min(max(dx * gain, -half * 0.32), half * 0.32)
-    vp_y = min(max(dy * gain, -half * 0.32), half * 0.32)
-
-    visible = [r for r in rhombi if abs(r["center"].real) <= half and abs(r["center"].imag) <= half]
-    cx_off = SVG_CENTER_X
-    cy_off = SVG_CENTER_Y
-
-    dirs = [(math.cos(2 * math.pi * k / 5), math.sin(2 * math.pi * k / 5)) for k in range(5)]
-    phase = [2 * math.pi * tau5_norm[k] for k in range(5)]
-
-    def _mask_val(x: float, y: float) -> float:
-        s = 0.0
-        for k in range(5):
-            s += math.cos((x * dirs[k][0] + y * dirs[k][1]) / max(med_edge, 1e-6) * 0.9 + phase[k])
-        return s / 5.0
-
-    vscale = 200_000
-    edge_to_ids: Dict[Tuple[Tuple[int, int], Tuple[int, int]], List[int]] = {}
-    for i, r in enumerate(visible):
-        vs = [(int(round(v.real * vscale)), int(round(v.imag * vscale))) for v in r["vertices"]]
-        ccx = sum(p[0] for p in vs) / 4.0
-        ccy = sum(p[1] for p in vs) / 4.0
-        vs.sort(key=lambda p: math.atan2(p[1] - ccy, p[0] - ccx))
-        for a, b in zip(vs, vs[1:] + vs[:1]):
-            e = (a, b) if a < b else (b, a)
-            edge_to_ids.setdefault(e, []).append(i)
-
-    adj: List[List[int]] = [[] for _ in range(len(visible))]
-    for ids in edge_to_ids.values():
-        if len(ids) < 2:
-            continue
-        a0 = ids[0]
-        for b0 in ids[1:]:
-            adj[a0].append(b0)
-            adj[b0].append(a0)
-
-    def _compute_figure_ids(cx0: float, cy0: float) -> set[int]:
-        if not visible:
-            return set()
-        seed0 = min(
-            range(len(visible)),
-            key=lambda i: math.hypot(visible[i]["center"].real - cx0, visible[i]["center"].imag - cy0),
+    if not global_tiles:
+        return generate_penrose_svg(
+            penrose_data=penrose_data,
+            risk_level=risk_level,
+            show_labels=show_labels,
+            show_hash=True,
         )
-        r_local = half * 0.46
-        r_cap = half * 0.34
-        scores: List[Tuple[float, int]] = []
-        for i, r in enumerate(visible):
-            dx0 = r["center"].real - cx0
-            dy0 = r["center"].imag - cy0
-            d0 = math.hypot(dx0, dy0)
-            if d0 > r_local:
+    # Debug: global field size
+    try:
+        print(f"tiles: {len(global_tiles)}")
+    except Exception:
+        pass
+
+    # ── GLOBAL SCALE/TRANSLATE (no τ-as-position) ───────────────────────────
+    # We render the fixed global field, scaled to the canvas. τ only selects
+    # ACTIVE tiles; it does not move the camera.
+    global_edge = _estimate_tile_size_from_tiles(global_tiles)
+    target_px = 34.0  # 25–50px target range
+    scale = max(8.0, min(200.0, target_px / max(global_edge, 1e-9)))
+
+    xs = [float(t["cx"]) for t in global_tiles]
+    ys = [float(t["cy"]) for t in global_tiles]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    cx0 = (min_x + max_x) * 0.5
+    cy0 = (min_y + max_y) * 0.5
+    cx_off = SVG_CENTER_X - cx0 * scale
+    cy_off = SVG_CENTER_Y - cy0 * scale
+
+    # Cull to viewport for performance, still based only on the global field bbox.
+    half = (SVG_WIDTH / (2 * scale)) * 1.10
+    visible = [
+        t
+        for t in global_tiles
+        if abs(float(t["cx"]) - cx0) <= half and abs(float(t["cy"]) - cy0) <= half
+    ]
+    # Debug: visible viewport size
+    try:
+        print(f"visible_tiles: {len(visible)}")
+    except Exception:
+        pass
+
+    # ── τ FILTER (CRITICAL) ────────────────────────────────────────────────
+    # Keep τ in the unit torus [0,1) per spec.
+    tau5 = [((float(tau_vectors[i]) if i < len(tau_vectors) else 0.5) % 1.0) for i in range(5)]
+
+    def _wrap_dist_01(a: float, b: float) -> float:
+        diff = abs(a - b)
+        return diff if diff <= 0.5 else (1.0 - diff)
+
+    def is_active_tile(tile: Dict[str, Any], tau: List[float]) -> bool:
+        score = 0
+        cx = float(tile["cx"])
+        cy = float(tile["cy"])
+        for k in range(5):
+            angle = 2 * math.pi * k / 5
+            ex = math.cos(angle)
+            ey = math.sin(angle)
+            proj = cx * ex + cy * ey
+            frac = proj % 1.0
+            diff = abs(frac - float(tau[k]))
+            if diff > 0.5:
+                diff = 1.0 - diff
+            if diff < 0.102:  # tuned threshold
+                score += 1
+        return score >= 3  # strict but stable
+
+    # ── Remove isolated active tiles (no adjacency/BFS expansion) ───────────
+    # Keep only active tiles that have >=3 active neighbours within radius.
+    radius = max(global_edge, 1e-9) * 1.10
+    r2 = radius * radius
+
+    def has_neighbor(tile: Dict[str, Any], tiles: List[Dict[str, Any]]) -> bool:
+        count = 0
+        cx = float(tile["cx"])
+        cy = float(tile["cy"])
+        for t in tiles:
+            if t is tile:
                 continue
-            s0 = _mask_val(dx0, dy0) - 0.40 * (d0 / max(r_local, 1e-9))
-            scores.append((s0, i))
-        scores.sort(reverse=True)
-        target = int(150 + 80 * (tau5_norm[1] - 0.5))
-        target = max(90, min(240, target))
-        allowed = {i for _, i in scores[: max(target * 3, 260)]}
-        if seed0 not in allowed and allowed:
-            seed0 = min(
-                allowed,
-                key=lambda i: math.hypot(visible[i]["center"].real - cx0, visible[i]["center"].imag - cy0),
-            )
-        fig: set[int] = set()
-        if seed0 not in allowed:
-            return fig
-        stack = [seed0]
-        fig.add(seed0)
-        while stack and len(fig) < target:
-            cur = stack.pop()
-            for nb in adj[cur]:
-                if nb in fig or nb not in allowed:
-                    continue
-                dnb = math.hypot(visible[nb]["center"].real - cx0, visible[nb]["center"].imag - cy0)
-                if dnb > r_cap:
-                    continue
-                fig.add(nb)
-                stack.append(nb)
-        return fig
+            dx = cx - float(t["cx"])
+            dy = cy - float(t["cy"])
+            if dx * dx + dy * dy < r2:
+                count += 1
+                if count >= 3:
+                    return True
+        return False
 
-    fig_ids = _compute_figure_ids(vp_x, vp_y)
+    # Compute active on the global field (τ is a filter over M).
+    # IMPORTANT: neighbors are evaluated only within the rendered viewport.
+    ACTIVE = [t for t in visible if is_active_tile(t, tau5)]
+    final_active = [t for t in ACTIVE if has_neighbor(t, ACTIVE)]
 
-    visited_pts: List[Tuple[float, float]] = []
-    for block in (chain or []):
-        bt = block.get("tau_vectors", [])
-        if not isinstance(bt, list) or not bt:
-            continue
-        try:
-            b5 = [(float(bt[k]) if k < len(bt) else 0.5) % 1.0 for k in range(5)]
-        except (TypeError, ValueError):
-            continue
-        bdx, bdy = _tau_to_xy(b5)
-        visited_pts.append((min(max(bdx * gain, -half * 0.32), half * 0.32), min(max(bdy * gain, -half * 0.32), half * 0.32)))
+    # ── DEBUG CHECK (MANDATORY) ─────────────────────────────────────────────
+    try:
+        total = len(visible) or 1
+        active_pct = (len(final_active) / total) * 100.0
+        print(f"Active tiles: {active_pct:.2f}%")
+    except Exception:
+        pass
 
-    fog_r = med_edge * 3.2
-
-    def _is_visited_r(r: Dict[str, Any]) -> bool:
-        if not visited_pts:
-            return False
-        cxr = r["center"].real
-        cyr = r["center"].imag
-        return any(math.hypot(cxr - vx, cyr - vy) <= fog_r for vx, vy in visited_pts)
-
+    # ── SVG layers (base → fog → figure) ────────────────────────────────────
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}" width="{SVG_WIDTH}" height="{SVG_HEIGHT}">',
-        '  <rect width="100%" height="100%" fill="#0f172a"/>',
-        '  <g id="tiles">',
+        ' <rect width="100%" height="100%" fill="#0f172a"/>',
+        ' <g id="tiles">',
     ]
 
-    def _rgb(hex_color: str) -> Tuple[int, int, int]:
-        h = hex_color.lstrip("#")
-        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-
-    def _mix(c1: str, c2: str, a: float) -> str:
-        r1, g1, b1 = _rgb(c1)
-        r2, g2, b2 = _rgb(c2)
-        r_ = int(r1 * (1 - a) + r2 * a)
-        g_ = int(g1 * (1 - a) + g2 * a)
-        b_ = int(b1 * (1 - a) + b2 * a)
-        return f"#{r_:02x}{g_:02x}{b_:02x}"
-
-    def _shade_by_orientation_r(r: Dict[str, Any], base: str) -> str:
-        v0, v1 = r["vertices"][0], r["vertices"][1]
-        ang = math.atan2((v1 - v0).imag, (v1 - v0).real)
-        k = (math.cos(ang - math.radians(35)) + 1.0) * 0.5
-        a = 0.08 + 0.07 * k
-        cxm = r["center"].real
-        cym = r["center"].imag
-        jitter = 0.035 * math.sin(cxm * 1.618 + cym * 1.414) + 0.03 * math.sin(cxm * 2.414 - cym * 1.732)
-        a = min(0.22, max(0.03, a + jitter))
-        return _mix(base, "#ffffff", a)
-
-    for i, r in enumerate(visible):
-        if i in fig_ids or _is_visited_r(r):
+    # Base (dark navy)
+    for t in visible:
+        fill = "#1e3a5f" if t["type"] == "thick" else "#172a4a"
+        d = _tile_path_raw(t, cx_off, cy_off, scale)
+        if d is None:
             continue
-        base = "#1f4a73" if r["type"] == "thick" else "#193b5f"
-        fill = _shade_by_orientation_r(r, base)
-        path = _path_from_complex_verts(r["vertices"], cx_off, cy_off, scale)
-        svg.append(f'    <path d="{path}" fill="{fill}" stroke="#0b223b" stroke-opacity="0.14" stroke-width="0.45"/>')
+        svg.append(
+            f'  <path d="{d}" fill="{fill}" stroke="#0b223b" stroke-opacity="0.22" stroke-width="0.6"/>'
+        )
 
-    for i, r in enumerate(visible):
-        if i in fig_ids or not _is_visited_r(r):
+    # Active tiles (gold islands via τ filter, isolated removed)
+    final_active_keys: set[Tuple[int, int]] = set()
+    qk = max(global_edge * 0.15, 1e-9)
+    for t in final_active:
+        final_active_keys.add((int(round(float(t["cx"]) / qk)), int(round(float(t["cy"]) / qk))))
+
+    n_active = 0
+    for t in visible:
+        if (int(round(float(t["cx"]) / qk)), int(round(float(t["cy"]) / qk))) not in final_active_keys:
             continue
-        base = "#2f5f93" if r["type"] == "thick" else "#28507d"
-        fill = _shade_by_orientation_r(r, base)
-        path = _path_from_complex_verts(r["vertices"], cx_off, cy_off, scale)
-        svg.append(f'    <path d="{path}" fill="{fill}" stroke="#12365a" stroke-opacity="0.18" stroke-width="0.45"/>')
-
-    n_fig = 0
-    for i, r in enumerate(visible):
-        if i not in fig_ids:
+        fill = "#f59e0b" if t["type"] == "thick" else "#fcd34d"
+        d = _tile_path_raw(t, cx_off, cy_off, scale)
+        if d is None:
             continue
-        base = "#f59e0b" if r["type"] == "thick" else "#fbbf24"
-        fill = _shade_by_orientation_r(r, base)
-        path = _path_from_complex_verts(r["vertices"], cx_off, cy_off, scale)
-        svg.append(f'    <path d="{path}" fill="{fill}" stroke="#d97706" stroke-opacity="0.65" stroke-width="0.65"/>')
-        n_fig += 1
+        svg.append(
+            f'  <path d="{d}" fill="{fill}" stroke="#d97706" stroke-opacity="0.85" stroke-width="0.8"/>'
+        )
+        n_active += 1
 
-    # ── Genesis compass ──────────────────────────────────────────────────────
+    # ── Genesis compass (τ difference, no τ→XY projection) ──────────────────
+    # Map direction using the first two τ components as an explicit direction
+    # vector in screen space (no pentagrid basis projection).
     gm = build_genesis()["genesis_mints"]
     g_info = [
         {"label": "c", "tau": gm[0]["tau_pentagrid"], "col": "#6366f1"},
-        {"label": "h", "tau": gm[1]["tau_pentagrid"], "col": "#8b5cf6"},
+        {"label": "ℏ", "tau": gm[1]["tau_pentagrid"], "col": "#8b5cf6"},
         {"label": "G", "tau": gm[2]["tau_pentagrid"], "col": "#a78bfa"},
     ]
     for g in g_info:
-        dtau = [float(g["tau"][k]) - tau5_norm[k] for k in range(5)]
-        dx = sum(dtau[k] * math.cos(2 * math.pi * k / 5) for k in range(5))
-        dy = sum(dtau[k] * math.sin(2 * math.pi * k / 5) for k in range(5))
-        dist = math.hypot(dx, dy)
-        if dist < 1e-9:
+        dt0 = float(g["tau"][0]) - float(tau_vectors[0] if len(tau_vectors) > 0 else 0.5)
+        dt1 = float(g["tau"][1]) - float(tau_vectors[1] if len(tau_vectors) > 1 else 0.5)
+        dist = math.hypot(dt0, dt1)
+        if dist < 1e-12:
             continue
-        ux, uy = dx / dist, dy / dist
+        ux, uy = dt0 / dist, dt1 / dist
         mx, my = SVG_CENTER_X, SVG_CENTER_Y
         rim = SVG_WIDTH * 0.36
         x2, y2 = mx + ux * rim, my + uy * rim
-        svg.append(
-            f' <line x1="{mx:.1f}" y1="{my:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{g["col"]}" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.6"/>'
-        )
+        svg.append(f' <line x1="{mx:.1f}" y1="{my:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{g["col"]}" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.6"/>')
         ax = x2 - ux * 8 + uy * 4
         ay = y2 - uy * 8 - ux * 4
         bx = x2 - ux * 8 - uy * 4
         by = y2 - uy * 8 + ux * 4
-        svg.append(
-            f' <polygon points="{x2:.1f},{y2:.1f} {ax:.1f},{ay:.1f} {bx:.1f},{by:.1f}" fill="{g["col"]}" opacity="0.7"/>'
-        )
-        svg.append(
-            f' <text x="{mx + ux * (rim + 14):.1f}" y="{my + uy * (rim + 14):.1f}" text-anchor="middle" fill="{g["col"]}" font-size="9" font-weight="bold">{g["label"]}</text>'
-        )
+        svg.append(f' <polygon points="{x2:.1f},{y2:.1f} {ax:.1f},{ay:.1f} {bx:.1f},{by:.1f}" fill="{g["col"]}" opacity="0.7"/>')
+        svg.append(f' <text x="{mx + ux * (rim + 14):.1f}" y="{my + uy * (rim + 14):.1f}" text-anchor="middle" fill="{g["col"]}" font-size="9" font-weight="bold">{g["label"]}</text>')
 
     # ── Risk badge + labels ───────────────────────────────────────────────────
     svg.extend(
@@ -646,7 +538,7 @@ def generate_penrose_svg_viewport(
         tau_str = ",".join(f"{v:.3f}" for v in tau_vectors[:3])
         svg.extend(
             [
-                f' <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="#94a3b8" font-size="9">Global M · Chain={chain_len} · N={N} · {n_fig} figure tiles</text>',
+                f' <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="#94a3b8" font-size="9">Global M · Chain={chain_len} · N=7 · {n_active} active tiles</text>',
                 f' <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT-10}" text-anchor="middle" fill="#475569" font-size="8">τ=[{tau_str}...] · {penrose_hash}</text>',
             ]
         )
