@@ -282,6 +282,43 @@ def penrose_patch(kag_hash: str, N: int = 6,
             "tile_count": len(norm_tiles),
             "tile_hash":  canonical_hash({"tau": tau, "tiles": norm_tiles})}
 
+
+def penrose_patch_raw(tau: List[float], N: int = 6) -> List[Dict[str, Any]]:
+    """Pentagrid cut with absolute coords. No normalisation. Loop follows tau."""
+    tau5 = [(float(tau[k]) if k < len(tau) else 0.5) % 1.0 for k in range(5)]
+    thetas = [k * 2 * math.pi / 5 for k in range(5)]
+    normals = [(math.cos(t), math.sin(t)) for t in thetas]
+    cache: Dict = {}
+
+    def vertex(i, a, j, b):
+        key = (i, a, j, b)
+        if key in cache:
+            return cache[key]
+        pt = _intersect(normals[i], a + tau5[i], normals[j], b + tau5[j])
+        cache[key] = pt
+        return pt
+
+    tiles = []
+    for i in range(5):
+        for j in range(i + 1, 5):
+            rtype = "thick" if (j - i) % 5 in (1, 4) else "thin"
+            ai = round(tau5[i] * N * 2)
+            bj = round(tau5[j] * N * 2)
+            for a in range(ai - N, ai + N + 1):
+                for b in range(bj - N, bj + N + 1):
+                    vs = [
+                        vertex(i, a, j, b),
+                        vertex(i, a + 1, j, b),
+                        vertex(i, a + 1, j, b + 1),
+                        vertex(i, a, j, b + 1),
+                    ]
+                    if None in vs:
+                        continue
+                    cx = sum(v[0] for v in vs) / 4
+                    cy = sum(v[1] for v in vs) / 4
+                    tiles.append({"type": rtype, "v": vs, "cx": cx, "cy": cy})
+    return tiles
+
 def penrose_match_score(tiling: Dict) -> float:
     """Measure how well the patch matches P3 invariants (0-1)."""
     tiles = tiling.get("tiles", [])
@@ -544,6 +581,12 @@ def build_genesis(extra_anchors: Optional[Dict[str, float]] = None) -> Dict[str,
         "schema":        SCHEMA,
         "anchors_used":  list(anchors.keys()),
     }
+
+
+def genesis_combined_tau() -> List[float]:
+    """Harmonic mean τ of the three Genesis mints. Call once, cache."""
+    g = build_genesis()["genesis_mints"]
+    return _harmonic_mean_tau5([m["tau_pentagrid"] for m in g])
 
 
 # ══════════════════════════════════════════════════════════════════
