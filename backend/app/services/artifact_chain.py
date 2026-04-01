@@ -87,6 +87,9 @@ def add_artifact_block(rim_report: Dict[str, Any], artifact_hash: str) -> Dict[s
     barycentric = list(map_position.get("barycentric") or [])
     manifold_hash = map_position.get("manifold_hash") or ""
     tile_hash = map_position.get("tile_hash") or ""
+    k5 = list(map_position.get("k5") or [])
+    world_x = float(map_position.get("world_x") or 0.0)
+    world_y = float(map_position.get("world_y") or 0.0)
 
     if not tau_vectors or not manifold_hash or not tile_hash:
         raise ValueError("Map position is incomplete; cannot create artifact block")
@@ -102,6 +105,9 @@ def add_artifact_block(rim_report: Dict[str, Any], artifact_hash: str) -> Dict[s
             "manifold_hash": manifold_hash,
             "tile_hash": tile_hash,
             "barycentric": barycentric,
+            "k5": k5,
+            "world_x": world_x,
+            "world_y": world_y,
             "prev_block_hash": prev_block.get("block_hash"),
         }
         block["block_hash"] = _canonical_hash(block)

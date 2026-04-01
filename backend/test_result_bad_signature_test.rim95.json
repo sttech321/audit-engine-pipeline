@@ -49,17 +49,17 @@
   "verification": {
     "status": "Verification Failed",
     "confidence": 33,
-    "timestamp": "2026-03-26T18:51:09Z",
+    "timestamp": "2026-04-01T18:24:18Z",
     "checks": [
       "Stage 1 - Schema & Genesis: OK",
       "Stage 2 - Entropy: avg_entropy_bits=1.5850",
-      "Stage 3 - Penrose geometry: avg_penrose_match=0.3579",
+      "Stage 3 - Penrose geometry: avg_penrose_match=0.3349",
       "Stage 4 - Anomalies: anomaly_fraction=0.0000, count=0",
       "Stage 5 - Risk: risk_level=HIGH"
     ]
   },
   "fileHash": "9a049b03f6fc40bfcf2f136320359257ed4af8513f71aa6fef47f17059bbae23",
-  "uploadId": "a530f09a-123f-4450-80aa-37c2c535fb96",
+  "uploadId": "40031bbb-53be-4e35-ae53-02e4ef3b69c2",
   "metadata": {
     "name": "Audit Report: bad_signature_test.rim95",
     "description": "Cryptographic audit artifact verified by RIMOS pipeline.",
@@ -76,25 +76,25 @@
     "verification_mode": "full"
   },
   "artifactBlock": {
-    "index": 96,
-    "timestamp": "2026-03-26T18:51:09Z",
+    "index": 153,
+    "timestamp": "2026-04-01T18:24:18Z",
     "artifact_hash": "9a049b03f6fc40bfcf2f136320359257ed4af8513f71aa6fef47f17059bbae23",
     "tau_vectors": [
-      0.9595022904564202,
-      0.11393855018660615,
-      0.8827999014620592,
-      0.2702600730737822,
-      0.5157963613698588
+      0.838008517786939,
+      0.0,
+      0.7330854552519404,
+      0.42890599076819913,
+      0.838008517786939
     ],
     "manifold_hash": "3f51be253eb47e6f9cc3597562a5c37451213694e53f5ceee186e873f8a58839",
-    "tile_hash": "fb1a73acf4203bcd4e35ffd524310f3bd08b5a1579c710d673ea17422be6d3a8",
+    "tile_hash": "a31cc39bba960a5bcf5f9b5c17b58543d1be8616502fcb361a639e50eb93126f",
     "barycentric": [
-      0.3254034065638785,
-      0.3226187820470019,
-      0.35197781138911954
+      0.3359551699840562,
+      0.34623500050422684,
+      0.31780982951171693
     ],
-    "prev_block_hash": "9aa042e9d43932c231b07cb749d560d72fc5de84f9563bdfeaa9c7a25bb00c3b",
-    "block_hash": "e217c6c55bd3af38d7e834d6676b450f7abcc24a67a2a338ebfdad014a8d72d4",
+    "prev_block_hash": "b0d3bf7d13adf020539a5f3448d675fb10d36dccfc7e86e21363fe6f70e8bd7e",
+    "block_hash": "ca069a9139b450a9eeabe3834883b8ea576abe1a81fe52837bae686c233950d0",
     "type": null,
     "anchors": null
   }

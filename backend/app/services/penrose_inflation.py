@@ -28,6 +28,23 @@ def _sun_seed() -> List[Tuple[int, complex, complex, complex]]:
     return triangles
 
 
+def _sun_seed_field_v6(center: complex = 0j) -> List[Tuple[int, complex, complex, complex]]:
+    """
+    Penrose Field v6 (client canvas): 10 Robinson *red* triangles (type 0) in the sun.
+    Must match reference HTML ``sunSeed`` so isometry alignment scores > 0.
+    """
+    triangles: List[Tuple[int, complex, complex, complex]] = []
+    for i in range(10):
+        angle_b = (2 * i - 1) * PI / 10
+        angle_c = (2 * i + 1) * PI / 10
+        B = complex(math.cos(angle_b), math.sin(angle_b))
+        C = complex(math.cos(angle_c), math.sin(angle_c))
+        if i % 2 == 1:
+            B, C = C, B
+        triangles.append((0, center, B, C))
+    return triangles
+
+
 def _subdivide(
     triangles: List[Tuple[int, complex, complex, complex]],
 ) -> List[Tuple[int, complex, complex, complex]]:
@@ -44,29 +61,76 @@ def _subdivide(
     return result
 
 
+# Integer vertex grid for edge matching (finer than 8-decimal float rounding).
+_RHOMBUS_VERTEX_SCALE = 1_000_000_000
+
+
+def _quantize_pt(z: complex) -> Tuple[int, int]:
+    return (
+        int(round(z.real * _RHOMBUS_VERTEX_SCALE)),
+        int(round(z.imag * _RHOMBUS_VERTEX_SCALE)),
+    )
+
+
+def _from_quant(q: Tuple[int, int]) -> complex:
+    return complex(q[0] / _RHOMBUS_VERTEX_SCALE, q[1] / _RHOMBUS_VERTEX_SCALE)
+
+
+def snap_triangles(
+    triangles: List[Tuple[int, complex, complex, complex]],
+    decimals: int = 12,
+) -> List[Tuple[int, complex, complex, complex]]:
+    """Reduce float jitter after subdivide / rotate so shared edges match reliably."""
+
+    def sn(z: complex) -> complex:
+        return complex(round(z.real, decimals), round(z.imag, decimals))
+
+    return [(c, sn(A), sn(B), sn(C)) for c, A, B, C in triangles]
+
+
+def dedupe_robinson_triangles(
+    triangles: List[Tuple[int, complex, complex, complex]],
+) -> List[Tuple[int, complex, complex, complex]]:
+    """
+    Remove duplicate triangles (same Robinson color + same three vertices).
+    Needed when merging two inflated patches that overlap in the plane.
+    """
+    seen: set[Tuple[int, Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]]] = set()
+    out: List[Tuple[int, complex, complex, complex]] = []
+    for col, A, B, C in triangles:
+        qs = tuple(sorted({_quantize_pt(A), _quantize_pt(B), _quantize_pt(C)}))
+        if len(qs) != 3:
+            continue
+        key = (col, (qs[0], qs[1], qs[2]))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((col, A, B, C))
+    return out
+
+
 def _triangles_to_rhombi_v2(
     triangles: List[Tuple[int, complex, complex, complex]],
 ) -> List[Dict[str, Any]]:
     """
-    Build rhombi by matching shared edges. Use vertex-based matching.
-    Two triangles form a rhombus if they share an edge and have same color.
+    Build rhombi by matching shared edges between same-colored triangles.
+    Fixed-point vertex keys prevent spurious merges that caused overlapping tiles.
     """
-    rhombi = []
+    rhombi: List[Dict[str, Any]] = []
 
-    def normalize_edge(a: complex, b: complex):
-        ar, ar_ = round(a.real, 8), round(a.imag, 8)
-        br, br_ = round(b.real, 8), round(b.imag, 8)
-        if (ar, ar_) < (br, br_):
-            return ((ar, ar_), (br, br_))
-        return ((br, br_), (ar, ar_))
+    def normalize_edge(a: complex, b: complex) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+        pa, pb = _quantize_pt(a), _quantize_pt(b)
+        if pa < pb:
+            return (pa, pb)
+        return (pb, pa)
 
-    edge_to_tris: Dict[tuple, List[int]] = {}
+    edge_to_tris: Dict[Tuple[Tuple[int, int], Tuple[int, int]], List[Tuple[int, int]]] = {}
     for idx, (col, A, B, C) in enumerate(triangles):
-        for e in [normalize_edge(A, B), normalize_edge(B, C), normalize_edge(C, A)]:
+        for e in (normalize_edge(A, B), normalize_edge(B, C), normalize_edge(C, A)):
             edge_to_tris.setdefault(e, []).append((idx, col))
 
-    paired = set()
-    for edge, tri_list in edge_to_tris.items():
+    paired: set[int] = set()
+    for _edge, tri_list in edge_to_tris.items():
         if len(tri_list) < 2:
             continue
         for i in range(len(tri_list)):
@@ -75,24 +139,19 @@ def _triangles_to_rhombi_v2(
                 idx_j, col_j = tri_list[j]
                 if col_i != col_j or idx_i in paired or idx_j in paired:
                     continue
-                # Same color, shared edge → rhombus
                 ti = triangles[idx_i]
                 tj = triangles[idx_j]
                 verts_i = [ti[1], ti[2], ti[3]]
                 verts_j = [tj[1], tj[2], tj[3]]
-                all_v = set()
-                for v in verts_i + verts_j:
-                    all_v.add((round(v.real, 8), round(v.imag, 8)))
-                if len(all_v) != 4:
+                corner_set = {_quantize_pt(v) for v in verts_i + verts_j}
+                if len(corner_set) != 4:
                     continue
-                pts = [complex(p[0], p[1]) for p in all_v]
-                center = sum(pts) / 4
-                angles = [
-                    (math.atan2(p.imag - center.imag, p.real - center.real), p)
-                    for p in pts
-                ]
-                angles.sort(key=lambda x: x[0])
-                verts = [a[1] for a in angles]
+                pts = [_from_quant(q) for q in corner_set]
+                center = sum(pts) / 4.0
+                verts = sorted(
+                    pts,
+                    key=lambda p: math.atan2(p.imag - center.imag, p.real - center.real),
+                )
                 rhombi.append(
                     {
                         "type": "thick" if col_i == 1 else "thin",
@@ -110,10 +169,12 @@ def _triangles_to_rhombi_v2(
     return rhombi
 
 
-def _inflate_penrose(seed_str: str, iterations: int = 6) -> List[Dict[str, Any]]:
+def _inflate_penrose_triangles(
+    seed_str: str, iterations: int = 6
+) -> List[Tuple[int, complex, complex, complex]]:
     """
-    Generate Penrose tiling via inflation.
-    Seed determines rotation: use hash to rotate initial wheel.
+    Inflate from the legacy blue sun seed with hash rotation; return triangles only.
+    Pairing is separate so multiple patches can be merged before _triangles_to_rhombi_v2().
     """
     triangles = _sun_seed()
 
@@ -133,5 +194,13 @@ def _inflate_penrose(seed_str: str, iterations: int = 6) -> List[Dict[str, Any]]
     for _ in range(iterations):
         triangles = _subdivide(triangles)
 
-    return _triangles_to_rhombi_v2(triangles)
+    return triangles
+
+
+def _inflate_penrose(seed_str: str, iterations: int = 6) -> List[Dict[str, Any]]:
+    """
+    Generate Penrose tiling via inflation.
+    Seed determines rotation: use hash to rotate initial wheel.
+    """
+    return _triangles_to_rhombi_v2(_inflate_penrose_triangles(seed_str, iterations))
 

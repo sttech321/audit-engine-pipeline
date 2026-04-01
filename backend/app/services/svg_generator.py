@@ -13,11 +13,20 @@ import math
 from collections import defaultdict
 from typing import Dict, Any, List, Optional, Tuple
 
-# Legacy inflation tiling (used by generate_penrose_svg fallback)
-from app.services.penrose_inflation import _inflate_penrose
+# Legacy inflation tiling (used by generate_penrose_svg fallback).
+# `_inflate_penrose_triangles` is available from penrose_inflation if callers need
+# raw tris from the *blue* sun seed; Field v6 viewport uses `_sun_seed_field_v6`
+# for background so Robinson colors match the mint patch at boundaries.
+from app.services.penrose_inflation import (
+    _inflate_penrose,
+    _subdivide,
+    _sun_seed_field_v6,
+    _triangles_to_rhombi_v2,
+    dedupe_robinson_triangles,
+    snap_triangles,
+)
 
-# SVG-VIS-004+005 v3 viewport: pentagrid absolute coords
-from rim_os_v2 import penrose_patch_raw, genesis_combined_tau, build_genesis
+from rim_os_v2 import build_genesis, k5_to_world_position
 
 # ─── Penrose P3 Constants ────────────────────────────────────────────────────
 
@@ -66,6 +75,10 @@ VIEWPORT_HALF_SPAN_FACTOR = 0.68
 VIEWPORT_VISUAL_THEME_REFERENCE = "reference"
 VIEWPORT_VISUAL_THEME_SPEC = "spec"
 DEFAULT_VIEWPORT_VISUAL_THEME = VIEWPORT_VISUAL_THEME_REFERENCE
+
+# Subdivision depth for Field v6 viewport: background (origin sun) + mint sun must match
+# so Robinson pairing sees a consistent mesh at the patch boundary.
+VIEWPORT_SUBDIV_ITERS = 6
 
 def _genesis_tau_vector(anchor_key: str) -> List[float]:
     """Deterministic 5D τ for Genesis anchors (c, ℏ, G) — stable across runs."""
@@ -269,6 +282,182 @@ def _chain_seed(chain: List[Dict[str, Any]]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _build_canonical_seed(iters: int = 5) -> List[Tuple[int, complex, complex, complex]]:
+    """
+    Sun at origin (Field v6 / Robinson type-0), subdivided for alignment targets.
+    """
+    triangles = _sun_seed_field_v6(0j)
+    for _ in range(iters):
+        triangles = _subdivide(triangles)
+    return triangles
+
+
+def _sun_seed_at(cx: float, cy: float) -> List[Tuple[int, complex, complex, complex]]:
+    offset = complex(cx, cy)
+    return [
+        (color, A + offset, B + offset, C + offset)
+        for (color, A, B, C) in _sun_seed_field_v6(0j)
+    ]
+
+
+def _viewport_background_field_tris(iterations: int) -> List[Tuple[int, complex, complex, complex]]:
+    """Origin-centred Field v6 sun, subdivided (same Robinson convention as mint)."""
+    tris = _sun_seed_field_v6(0j)
+    for _ in range(iterations):
+        tris = snap_triangles(_subdivide(tris))
+    return tris
+
+
+def _aabb_of_triangles(
+    tris: List[Tuple[int, complex, complex, complex]],
+) -> Tuple[float, float, float, float]:
+    xs: List[float] = []
+    ys: List[float] = []
+    for _, A, B, C in tris:
+        for z in (A, B, C):
+            xs.append(z.real)
+            ys.append(z.imag)
+    if not xs:
+        return (0.0, 0.0, 0.0, 0.0)
+    return (min(xs), max(xs), min(ys), max(ys))
+
+
+def _filter_tris_overlapping_aabb(
+    tris: List[Tuple[int, complex, complex, complex]],
+    x0: float,
+    x1: float,
+    y0: float,
+    y1: float,
+    pad: float,
+) -> List[Tuple[int, complex, complex, complex]]:
+    """Keep triangles whose centroid or any vertex lies in the padded axis-aligned box."""
+    xa, xb = x0 - pad, x1 + pad
+    ya, yb = y0 - pad, y1 + pad
+    out: List[Tuple[int, complex, complex, complex]] = []
+    for col, A, B, C in tris:
+        inside = False
+        for z in (A, B, C):
+            if xa <= z.real <= xb and ya <= z.imag <= yb:
+                inside = True
+                break
+        if not inside:
+            cx = (A.real + B.real + C.real) / 3.0
+            cy = (A.imag + B.imag + C.imag) / 3.0
+            if xa <= cx <= xb and ya <= cy <= yb:
+                inside = True
+        if inside:
+            out.append((col, A, B, C))
+    return out
+
+
+def _build_mint_patch(
+    k5: List[float],
+    canonical_seed_tris: List[Tuple[int, complex, complex, complex]],
+    inflate_pre_align: int = 3,
+    inflate_after_rotate: int = 3,
+) -> Tuple[List[Tuple[int, complex, complex, complex]], float, int]:
+    """
+    Match client Penrose Field v6 reference (deflation → isometry → inflation).
+
+    Returns **triangles** only; pair with `_triangles_to_rhombi_v2` after merging with
+    the background triangle list so boundary edges get partners.
+
+    - Canonical seed at origin: `canonical_seed_tris` (sun + subdivisions).
+    - Input sun at k5 world position + `inflate_pre_align` subdivisions.
+    - Alignment: translate to sun apex, scale by PHI², rotate vs canonical vertices.
+    - Mint: rotate the *unscaled* input patch by the best angle, then
+      `inflate_after_rotate` further subdivisions (defaults 3+3 → 6 with ``VIEWPORT_SUBDIV_ITERS``).
+    """
+    wx, wy = k5_to_world_position(k5)
+
+    input_tris = _sun_seed_at(wx, wy)
+    for _ in range(inflate_pre_align):
+        input_tris = snap_triangles(_subdivide(input_tris))
+
+    deflate = PHI**2
+
+    def vkey_vert(v: complex) -> str:
+        return f"{round(v.real)},{round(v.imag)}"
+
+    seed_verts = {
+        vkey_vert(v)
+        for (_, A, B, C) in canonical_seed_tris
+        for v in (A, B, C)
+    }
+
+    apex = complex(wx, wy)
+    best_angle = 0.0
+    best_score = -1
+    for k in range(5):
+        angle = k * 2 * math.pi / 5
+        c, s = math.cos(angle), math.sin(angle)
+        score = 0
+        for (_, A, B, C) in input_tris:
+            for v in (A, B, C):
+                w = deflate * (v - apex)
+                score += int(
+                    vkey_vert(complex(w.real * c - w.imag * s, w.real * s + w.imag * c))
+                    in seed_verts
+                )
+        if score > best_score:
+            best_score = score
+            best_angle = angle
+
+    c, s = math.cos(best_angle), math.sin(best_angle)
+
+    def _rot(z: complex) -> complex:
+        return complex(z.real * c - z.imag * s, z.real * s + z.imag * c)
+
+    mint_tris = snap_triangles(
+        [
+            (color, _rot(A), _rot(B), _rot(C))
+            for (color, A, B, C) in input_tris
+        ]
+    )
+    for _ in range(inflate_after_rotate):
+        mint_tris = snap_triangles(_subdivide(mint_tris))
+
+    return mint_tris, best_angle, best_score
+
+
+# Alias for callers / docs: mint pipeline returns triangles only, single pairing after merge.
+_build_mint_patch_triangles = _build_mint_patch
+
+
+def _approx_k5_from_tau(tau: List[float], scale: float = 50.0) -> List[float]:
+    """Map legacy τ ∈ [0,1]⁵ back to a rough k5 for chain blocks without k5."""
+    tt = (list(tau) + [0.5] * 5)[:5]
+    return [(float(tt[i]) - 0.5) * 2.0 * scale for i in range(5)]
+
+
+def _rhombus_path_screen(
+    r: Dict[str, Any],
+    cx_off: float,
+    cy_off: float,
+    scale: float,
+) -> str:
+    verts = r.get("vertices") or []
+    if len(verts) != 4:
+        return ""
+    pts = [(cx_off + v.real * scale, cy_off + v.imag * scale) for v in verts]
+    d = f"M {pts[0][0]:.4f},{pts[0][1]:.4f}"
+    for px, py in pts[1:]:
+        d += f" L {px:.4f},{py:.4f}"
+    return d + " Z"
+
+
+def _ammann_segments_complex(t: Dict[str, Any]) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    verts = t.get("vertices") or []
+    if len(verts) != 4:
+        return []
+    vs = [(v.real, v.imag) for v in verts]
+    m01 = ((vs[0][0] + vs[1][0]) * 0.5, (vs[0][1] + vs[1][1]) * 0.5)
+    m12 = ((vs[1][0] + vs[2][0]) * 0.5, (vs[1][1] + vs[2][1]) * 0.5)
+    m23 = ((vs[2][0] + vs[3][0]) * 0.5, (vs[2][1] + vs[3][1]) * 0.5)
+    m30 = ((vs[3][0] + vs[0][0]) * 0.5, (vs[3][1] + vs[0][1]) * 0.5)
+    return [(m01, m23), (m12, m30)]
+
+
 def generate_penrose_svg_viewport(
     penrose_data: Dict[str, Any],
     chain: List[Dict[str, Any]],
@@ -279,27 +468,19 @@ def generate_penrose_svg_viewport(
     visual_theme: str = DEFAULT_VIEWPORT_VISUAL_THEME,
 ) -> str:
     """
-    Render a viewport on the single global Penrose P3 tiling M (chain seed).
-
-    Underlying geometry is Penrose P3–type rhombi from inflation (true P3 / de Bruijn dual).
-    visual_theme "reference": light paper field, star hubs (magenta/pale gold), τ signature gold — client mockup.
-    visual_theme "spec": SVG-VIS-003 dimmed manifold + gold τ + Genesis (§4.4).
+    Viewport: single mint mesh (Field v6 isometry pipeline). Tiles are coloured
+    by distance from the patch centroid—round gold core, steel fog when the chain
+    visited nearby, dark blue rim—matching the client tile-view mockup.
     """
-    global_seed = _chain_seed(chain)
+    del viewport_radius, tau_window_delta  # retained for API compatibility
+
     risk_color = RISK_COLORS.get(risk_level, RISK_COLORS["LOW"])
-    sector = int(penrose_data.get("sector", 0))
     penrose_hash = str(penrose_data.get("penrose_hash", ""))[:16]
     chain_len = len(chain or [])
-    delta = (
-        MINT_TAU_WINDOW_DELTA
-        if tau_window_delta is None
-        else min(max(tau_window_delta, 1e-6), 0.49)
-    )
 
     tau_raw = penrose_data.get("tau_vectors", penrose_data.get("tau", [0.5]))
     if not isinstance(tau_raw, list):
         tau_raw = [tau_raw]
-
     tau_vectors: List[float] = []
     for value in tau_raw:
         try:
@@ -308,6 +489,13 @@ def generate_penrose_svg_viewport(
             continue
     if not tau_vectors:
         tau_vectors = [0.5]
+    tau5_norm = [(float(tau_vectors[k]) if k < len(tau_vectors) else 0.5) for k in range(5)]
+
+    k5_in = penrose_data.get("k5")
+    if isinstance(k5_in, list) and len(k5_in) >= 5:
+        k5: List[float] = [float(k5_in[i]) for i in range(5)]
+    else:
+        k5 = _approx_k5_from_tau(tau_vectors)
 
     theme = (
         penrose_data.get("viewport_visual_theme")
@@ -317,229 +505,241 @@ def generate_penrose_svg_viewport(
     if theme not in (VIEWPORT_VISUAL_THEME_REFERENCE, VIEWPORT_VISUAL_THEME_SPEC):
         theme = VIEWPORT_VISUAL_THEME_REFERENCE
 
-    # ======================================================================
-    # NEW VIEWPORT PIPELINE (SVG-VIS-004+005) — strict τ geometry
-    #
-    # Legacy viewport system exists above in history but is fully bypassed:
-    # - NO inflation tiling
-    # - NO τ projections / masks
-    # - NO adjacency / scoring logic
-    # ======================================================================
+    # Merge triangle soups, then ONE pairing pass (boundary triangles get neighbours).
+    # Same subdivision depth everywhere: VIEWPORT_SUBDIV_ITERS (canonical seed,
+    # background sun, mint: pre_align + post_rotate = iters).
+    canonical_seed_tris = _build_canonical_seed(iters=VIEWPORT_SUBDIV_ITERS)
+    mint_tris, theta_opt, align_score = _build_mint_patch_triangles(
+        k5,
+        canonical_seed_tris,
+        inflate_pre_align=3,
+        inflate_after_rotate=VIEWPORT_SUBDIV_ITERS - 3,
+    )
+    bg_full = _viewport_background_field_tris(VIEWPORT_SUBDIV_ITERS)
+    mx0, mx1, my0, my1 = _aabb_of_triangles(mint_tris)
+    pad = max(mx1 - mx0, my1 - my0, 1e-6) * 0.35 + 0.5
+    bg_tris = _filter_tris_overlapping_aabb(bg_full, mx0, mx1, my0, my1, pad)
+    merged_tris = dedupe_robinson_triangles(bg_tris + mint_tris)
+    merged_tris = snap_triangles(merged_tris)
+    mint_rhombi = _triangles_to_rhombi_v2(merged_tris)
 
-    def _estimate_tile_size_from_tiles(tiles0: List[Dict[str, Any]]) -> float:
-        # Median edge length across a sample of tiles; robust enough for tolerance + scale.
-        edges: List[float] = []
-        for t in tiles0[:500]:
-            vs = t.get("v") or []
-            if len(vs) != 4:
-                continue
-            for a, b in zip(vs, vs[1:] + vs[:1]):
-                edges.append(math.hypot(a[0] - b[0], a[1] - b[1]))
-        edges.sort()
-        return edges[len(edges) // 2] if edges else 1.0
-
-    def _tile_path_raw(t: Dict[str, Any], cx_off0: float, cy_off0: float, scale0: float) -> Optional[str]:
-        # Enforce a valid rhombus: exactly 4 unique vertices, cyclic order.
-        vs = t.get("v") or []
-        if len(vs) != 4:
-            return None
-        uniq = {(round(v[0], 10), round(v[1], 10)) for v in vs}
-        if len(uniq) != 4:
-            return None
-        cx0 = float(t["cx"])
-        cy0 = float(t["cy"])
-        vs0 = list(uniq)
-        vs0.sort(key=lambda p: math.atan2(p[1] - cy0, p[0] - cx0))
-        pts = [(cx_off0 + v[0] * scale0, cy_off0 + v[1] * scale0) for v in vs0]
-        d = f"M {pts[0][0]:.2f},{pts[0][1]:.2f}"
-        for px, py in pts[1:]:
-            d += f" L {px:.2f},{py:.2f}"
-        return d + " Z"
-
-    # ── GLOBAL MAP M (build once) ───────────────────────────────────────────
-    global_tiles = getattr(generate_penrose_svg_viewport, "_p3_global_tiles_v1", None)
-    if global_tiles is None:
-        tau_genesis = genesis_combined_tau()
-        global_tiles = penrose_patch_raw(tau_genesis, N=7)
-        setattr(generate_penrose_svg_viewport, "_p3_global_tiles_v1", global_tiles)
-
-    if not global_tiles:
+    if not mint_rhombi:
         return generate_penrose_svg(
             penrose_data=penrose_data,
             risk_level=risk_level,
             show_labels=show_labels,
             show_hash=True,
         )
-    # Debug: global field size
-    try:
-        print(f"tiles: {len(global_tiles)}")
-    except Exception:
-        pass
 
-    # ── GLOBAL SCALE/TRANSLATE (no τ-as-position) ───────────────────────────
-    # We render the fixed global field, scaled to the canvas. τ only selects
-    # ACTIVE tiles; it does not move the camera.
-    global_edge = _estimate_tile_size_from_tiles(global_tiles)
-    target_px = 34.0  # 25–50px target range
-    scale = max(8.0, min(200.0, target_px / max(global_edge, 1e-9)))
-
-    xs = [float(t["cx"]) for t in global_tiles]
-    ys = [float(t["cy"]) for t in global_tiles]
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    cx0 = (min_x + max_x) * 0.5
-    cy0 = (min_y + max_y) * 0.5
-    cx_off = SVG_CENTER_X - cx0 * scale
-    cy_off = SVG_CENTER_Y - cy0 * scale
-
-    # Cull to viewport for performance, still based only on the global field bbox.
-    half = (SVG_WIDTH / (2 * scale)) * 1.10
-    visible = [
-        t
-        for t in global_tiles
-        if abs(float(t["cx"]) - cx0) <= half and abs(float(t["cy"]) - cy0) <= half
-    ]
-    # Debug: visible viewport size
-    try:
-        print(f"visible_tiles: {len(visible)}")
-    except Exception:
-        pass
-
-    # ── τ FILTER (CRITICAL) ────────────────────────────────────────────────
-    # Keep τ in the unit torus [0,1) per spec.
-    tau5 = [((float(tau_vectors[i]) if i < len(tau_vectors) else 0.5) % 1.0) for i in range(5)]
-
-    def _wrap_dist_01(a: float, b: float) -> float:
-        diff = abs(a - b)
-        return diff if diff <= 0.5 else (1.0 - diff)
-
-    def is_active_tile(tile: Dict[str, Any], tau: List[float]) -> bool:
-        score = 0
-        cx = float(tile["cx"])
-        cy = float(tile["cy"])
-        for k in range(5):
-            angle = 2 * math.pi * k / 5
-            ex = math.cos(angle)
-            ey = math.sin(angle)
-            proj = cx * ex + cy * ey
-            frac = proj % 1.0
-            diff = abs(frac - float(tau[k]))
-            if diff > 0.5:
-                diff = 1.0 - diff
-            if diff < 0.102:  # tuned threshold
-                score += 1
-        return score >= 3  # strict but stable
-
-    # ── Remove isolated active tiles (no adjacency/BFS expansion) ───────────
-    # Keep only active tiles that have >=3 active neighbours within radius.
-    radius = max(global_edge, 1e-9) * 1.10
-    r2 = radius * radius
-
-    def has_neighbor(tile: Dict[str, Any], tiles: List[Dict[str, Any]]) -> bool:
-        count = 0
-        cx = float(tile["cx"])
-        cy = float(tile["cy"])
-        for t in tiles:
-            if t is tile:
+    visit_xy: List[Tuple[float, float]] = []
+    for block in chain or []:
+        if block.get("type") == "GENESIS":
+            continue
+        bk = block.get("k5")
+        if isinstance(bk, list) and len(bk) >= 5:
+            kb = [float(bk[i]) for i in range(5)]
+        else:
+            tv = block.get("tau_vectors") or []
+            if not tv:
                 continue
-            dx = cx - float(t["cx"])
-            dy = cy - float(t["cy"])
-            if dx * dx + dy * dy < r2:
-                count += 1
-                if count >= 3:
-                    return True
-        return False
+            tvf = [float(x) for x in tv if isinstance(x, (int, float))]
+            if not tvf:
+                continue
+            kb = _approx_k5_from_tau(tvf)
+        visit_xy.append(k5_to_world_position(kb))
 
-    # Compute active on the global field (τ is a filter over M).
-    # IMPORTANT: neighbors are evaluated only within the rendered viewport.
-    ACTIVE = [t for t in visible if is_active_tile(t, tau5)]
-    final_active = [t for t in ACTIVE if has_neighbor(t, ACTIVE)]
+    visit_radius = 3.0
 
-    # ── DEBUG CHECK (MANDATORY) ─────────────────────────────────────────────
-    try:
-        total = len(visible) or 1
-        active_pct = (len(final_active) / total) * 100.0
-        print(f"Active tiles: {active_pct:.2f}%")
-    except Exception:
-        pass
+    def near_visit(cx: float, cy: float) -> bool:
+        return any(math.hypot(cx - px, cy - py) < visit_radius for px, py in visit_xy)
 
-    # ── SVG layers (base → fog → figure) ────────────────────────────────────
+    # Mint-centric framing (matches client canvas “tile view”): a global bbox often
+    # shrinks scale to sub-pixel rhombi while the compass stays visible in px space.
+    xs: List[float] = []
+    ys: List[float] = []
+    for r in mint_rhombi:
+        for v in r.get("vertices") or []:
+            xs.append(v.real)
+            ys.append(v.imag)
+    if not xs:
+        return generate_penrose_svg(
+            penrose_data=penrose_data,
+            risk_level=risk_level,
+            show_labels=show_labels,
+            show_hash=True,
+        )
+
+    x_lo, x_hi = min(xs), max(xs)
+    y_lo, y_hi = min(ys), max(ys)
+    span_raw = max(x_hi - x_lo, y_hi - y_lo, 4.0)
+    pad = span_raw * 0.20
+    span = span_raw + 2 * pad
+    vp_cx = (x_lo + x_hi) * 0.5
+    vp_cy = (y_lo + y_hi) * 0.5
+    scale = (SVG_WIDTH * 0.90) / span
+    cx_off = SVG_CENTER_X - vp_cx * scale
+    cy_off = SVG_CENTER_Y - vp_cy * scale
+
+    # Inner “figure” band: distance from patch centroid — round gold core + blue rim
+    # (client canvas); same idea as hub-centered penrose_patch() tiling.
+    apex_x, apex_y = vp_cx, vp_cy
+    dists_sorted: List[float] = []
+    for r in mint_rhombi:
+        c = r.get("center")
+        if c is None:
+            continue
+        dists_sorted.append(math.hypot(c.real - apex_x, c.imag - apex_y))
+    dists_sorted.sort()
+    fig_r = (
+        dists_sorted[max(0, min(len(dists_sorted) - 1, int(len(dists_sorted) * 0.30)))]
+        if dists_sorted
+        else 0.5
+    )
+
+    n_mint = len(mint_rhombi)
+    n_figure = sum(
+        1
+        for r in mint_rhombi
+        if r.get("center")
+        and math.hypot(r["center"].real - apex_x, r["center"].imag - apex_y) < fig_r
+    )
+
     svg = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}" width="{SVG_WIDTH}" height="{SVG_HEIGHT}">',
-        ' <rect width="100%" height="100%" fill="#0f172a"/>',
-        ' <g id="tiles">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}" '
+        f'width="{SVG_WIDTH}" height="{SVG_HEIGHT}" shape-rendering="geometricPrecision">',
+        '  <rect width="100%" height="100%" fill="#0f172a"/>',
+        '  <g id="tiles">',
     ]
 
-    # Base (dark navy)
-    for t in visible:
-        fill = "#1e3a5f" if t["type"] == "thick" else "#172a4a"
-        d = _tile_path_raw(t, cx_off, cy_off, scale)
-        if d is None:
-            continue
+    def _rgb(hex_color: str) -> Tuple[int, int, int]:
+        h = hex_color.lstrip("#")
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+    def _mix(c1: str, c2: str, a: float) -> str:
+        r1, g1, b1 = _rgb(c1)
+        r2, g2, b2 = _rgb(c2)
+        r = int(r1 * (1 - a) + r2 * a)
+        g = int(g1 * (1 - a) + g2 * a)
+        b = int(b1 * (1 - a) + b2 * a)
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def _shade_rh(rh: Dict[str, Any], base: str) -> str:
+        verts = rh.get("vertices") or []
+        if len(verts) != 4:
+            return base
+        a0, a1 = verts[0], verts[1]
+        ang = math.atan2(a1.imag - a0.imag, a1.real - a0.real)
+        k = (math.cos(ang - math.radians(35)) + 1.0) * 0.5
+        al = 0.07 + 0.06 * k
+        cen = rh.get("center") or sum(verts) / 4
+        al += 0.03 * math.sin(cen.real * 1.618 + cen.imag * 1.414)
+        al = min(0.18, max(0.03, al))
+        return _mix(base, "#ffffff", al)
+
+    def _emit_rh(
+        rh: Dict[str, Any],
+        base: str,
+        stroke: str,
+        stro_op: float,
+        stro_w: float,
+        bar_op: float,
+        bar_w: float,
+    ) -> None:
+        fill = _shade_rh(rh, base)
+        path = _rhombus_path_screen(rh, cx_off, cy_off, scale)
         svg.append(
-            f'  <path d="{d}" fill="{fill}" stroke="#0b223b" stroke-opacity="0.22" stroke-width="0.6"/>'
+            f'    <path d="{path}" fill="{fill}" stroke="{stroke}" '
+            f'stroke-opacity="{stro_op:.2f}" stroke-width="{stro_w:.2f}"/>'
         )
+        for (a, b) in _ammann_segments_complex(rh):
+            x1, y1 = cx_off + a[0] * scale, cy_off + a[1] * scale
+            x2, y2 = cx_off + b[0] * scale, cy_off + b[1] * scale
+            svg.append(
+                f'    <line x1="{x1:.4f}" y1="{y1:.4f}" x2="{x2:.4f}" y2="{y2:.4f}" '
+                f'stroke="#facc15" stroke-opacity="{bar_op:.2f}" stroke-width="{bar_w:.2f}"/>'
+            )
 
-    # Active tiles (gold islands via τ filter, isolated removed)
-    final_active_keys: set[Tuple[int, int]] = set()
-    qk = max(global_edge * 0.15, 1e-9)
-    for t in final_active:
-        final_active_keys.add((int(round(float(t["cx"]) / qk)), int(round(float(t["cy"]) / qk))))
+    # One mesh: figure (gold core) + fog (steel) + base (navy-blue rhombi).
+    def _band(r: Dict[str, Any]) -> str:
+        c = r.get("center")
+        if c is None:
+            return "base"
+        d = math.hypot(c.real - apex_x, c.imag - apex_y)
+        if d < fig_r:
+            return "figure"
+        if near_visit(c.real, c.imag):
+            return "fog"
+        return "base"
 
-    n_active = 0
-    for t in visible:
-        if (int(round(float(t["cx"]) / qk)), int(round(float(t["cy"]) / qk))) not in final_active_keys:
-            continue
-        fill = "#f59e0b" if t["type"] == "thick" else "#fcd34d"
-        d = _tile_path_raw(t, cx_off, cy_off, scale)
-        if d is None:
-            continue
-        svg.append(
-            f'  <path d="{d}" fill="{fill}" stroke="#d97706" stroke-opacity="0.85" stroke-width="0.8"/>'
-        )
-        n_active += 1
+    for band_name in ("base", "fog", "figure"):
+        for r in mint_rhombi:
+            if _band(r) != band_name:
+                continue
+            thick = r["type"] == "thick"
+            if band_name == "figure":
+                base = "#f59e0b" if thick else "#fcd34d"
+                _emit_rh(r, base, "#7c2d12", 0.55, 0.75, 0.70, 0.55)
+            elif band_name == "fog":
+                base = "#2d5a8e" if thick else "#264d7a"
+                _emit_rh(r, base, "#0b1220", 0.45, 0.85, 0.60, 0.55)
+            else:
+                base = "#24364f" if thick else "#1f2f46"
+                _emit_rh(r, base, "#0b1220", 0.55, 0.85, 0.55, 0.55)
 
-    # ── Genesis compass (τ difference, no τ→XY projection) ──────────────────
-    # Map direction using the first two τ components as an explicit direction
-    # vector in screen space (no pentagrid basis projection).
     gm = build_genesis()["genesis_mints"]
     g_info = [
         {"label": "c", "tau": gm[0]["tau_pentagrid"], "col": "#6366f1"},
-        {"label": "ℏ", "tau": gm[1]["tau_pentagrid"], "col": "#8b5cf6"},
+        {"label": "h", "tau": gm[1]["tau_pentagrid"], "col": "#8b5cf6"},
         {"label": "G", "tau": gm[2]["tau_pentagrid"], "col": "#a78bfa"},
     ]
     for g in g_info:
-        dt0 = float(g["tau"][0]) - float(tau_vectors[0] if len(tau_vectors) > 0 else 0.5)
-        dt1 = float(g["tau"][1]) - float(tau_vectors[1] if len(tau_vectors) > 1 else 0.5)
-        dist = math.hypot(dt0, dt1)
-        if dist < 1e-12:
+        dtau = [float(g["tau"][k]) - tau5_norm[k] for k in range(5)]
+        dx = sum(dtau[k] * math.cos(2 * math.pi * k / 5) for k in range(5))
+        dy = sum(dtau[k] * math.sin(2 * math.pi * k / 5) for k in range(5))
+        dist = math.hypot(dx, dy)
+        if dist < 1e-9:
             continue
-        ux, uy = dt0 / dist, dt1 / dist
+        ux, uy = dx / dist, dy / dist
         mx, my = SVG_CENTER_X, SVG_CENTER_Y
         rim = SVG_WIDTH * 0.36
         x2, y2 = mx + ux * rim, my + uy * rim
-        svg.append(f' <line x1="{mx:.1f}" y1="{my:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{g["col"]}" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.6"/>')
+        svg.append(
+            f'    <line x1="{mx:.1f}" y1="{my:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+            f'stroke="{g["col"]}" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.6"/>'
+        )
         ax = x2 - ux * 8 + uy * 4
         ay = y2 - uy * 8 - ux * 4
         bx = x2 - ux * 8 - uy * 4
         by = y2 - uy * 8 + ux * 4
-        svg.append(f' <polygon points="{x2:.1f},{y2:.1f} {ax:.1f},{ay:.1f} {bx:.1f},{by:.1f}" fill="{g["col"]}" opacity="0.7"/>')
-        svg.append(f' <text x="{mx + ux * (rim + 14):.1f}" y="{my + uy * (rim + 14):.1f}" text-anchor="middle" fill="{g["col"]}" font-size="9" font-weight="bold">{g["label"]}</text>')
+        svg.append(
+            f'    <polygon points="{x2:.1f},{y2:.1f} {ax:.1f},{ay:.1f} {bx:.1f},{by:.1f}" '
+            f'fill="{g["col"]}" opacity="0.7"/>'
+        )
+        svg.append(
+            f'    <text x="{mx + ux * (rim + 14):.1f}" y="{my + uy * (rim + 14):.1f}" '
+            f'text-anchor="middle" fill="{g["col"]}" font-size="9" font-weight="bold">'
+            f'{g["label"]}</text>'
+        )
 
-    # ── Risk badge + labels ───────────────────────────────────────────────────
+    deg = round(math.degrees(theta_opt)) % 360
     svg.extend(
         [
-            " </g>",
-            f' <rect x="{SVG_WIDTH-55}" y="15" width="45" height="20" rx="10" fill="{risk_color}" fill-opacity="0.9"/>',
-            f' <text x="{SVG_WIDTH-32}" y="29" text-anchor="middle" fill="white" font-size="10" font-weight="bold">{risk_level}</text>',
+            "  </g>",
+            f'  <rect x="{SVG_WIDTH-55}" y="15" width="45" height="20" rx="10" '
+            f'fill="{risk_color}" fill-opacity="0.9"/>',
+            f'  <text x="{SVG_WIDTH-32}" y="29" text-anchor="middle" fill="white" '
+            f'font-size="10" font-weight="bold">{risk_level}</text>',
         ]
     )
     if show_labels:
         tau_str = ",".join(f"{v:.3f}" for v in tau_vectors[:3])
         svg.extend(
             [
-                f' <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="#94a3b8" font-size="9">Global M · Chain={chain_len} · N=7 · {n_active} active tiles</text>',
-                f' <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT-10}" text-anchor="middle" fill="#475569" font-size="8">τ=[{tau_str}...] · {penrose_hash}</text>',
+                f'  <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="#94a3b8" '
+                f'font-size="9">Field v6 · chain={chain_len} · tiles={n_mint} · '
+                f'figure={n_figure} · θ={deg}° · align={align_score} · {theme}</text>',
+                f'  <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT-10}" text-anchor="middle" '
+                f'fill="#475569" font-size="8">τ=[{tau_str}...] · {penrose_hash}</text>',
             ]
         )
     svg.append("</svg>")

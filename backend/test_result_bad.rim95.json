@@ -8,7 +8,7 @@
     {
       "id": "kpi-1",
       "label": "Audit Score",
-      "value": 33.0,
+      "value": 32.0,
       "trend": "down",
       "status": "warning",
       "description": "RIM-OS integrity score (0\u2013100)"
@@ -48,25 +48,25 @@
   ],
   "verification": {
     "status": "Verification Failed",
-    "confidence": 33,
-    "timestamp": "2026-03-26T18:51:12Z",
+    "confidence": 32,
+    "timestamp": "2026-04-01T18:24:20Z",
     "checks": [
       "Stage 1 - Schema & Genesis: OK",
       "Stage 2 - Entropy: avg_entropy_bits=2.4056",
-      "Stage 3 - Penrose geometry: avg_penrose_match=0.3593",
+      "Stage 3 - Penrose geometry: avg_penrose_match=0.3317",
       "Stage 4 - Anomalies: anomaly_fraction=0.0000, count=0",
       "Stage 5 - Risk: risk_level=HIGH"
     ]
   },
   "fileHash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
-  "uploadId": "1897348c-298e-42dd-8491-3ecca442f077",
+  "uploadId": "5cc084ef-99b5-4fdb-9e12-eaade7a5c33a",
   "metadata": {
     "name": "Audit Report: bad.rim95",
     "description": "Cryptographic audit artifact verified by RIMOS pipeline.",
     "attributes": [
       {
         "trait_type": "Audit Score",
-        "value": 33.0
+        "value": 32.0
       },
       {
         "trait_type": "Status",
@@ -76,25 +76,25 @@
     "verification_mode": "full"
   },
   "artifactBlock": {
-    "index": 97,
-    "timestamp": "2026-03-26T18:51:12Z",
+    "index": 154,
+    "timestamp": "2026-04-01T18:24:20Z",
     "artifact_hash": "4bc73be8dbcf6fb6d4829a37cd5aa47e73c1b3d90e2ccfd33ac9d9a64fd22e6b",
     "tau_vectors": [
-      0.9066624331551252,
-      0.5517315917554427,
-      0.9672769950888935,
-      0.9904199093713556,
-      0.056702081764307466
+      0.5487838204090402,
+      0.7608918126116896,
+      0.6208745243498367,
+      0.996864043145358,
+      0.0
     ],
     "manifold_hash": "b2375def6003bd6b0d4fd802c9a771f9f48e82e2eef33e340bd5011885b17fac",
-    "tile_hash": "8a720ade0e89c61163a45f5a0dce8b595ae55ed4ed3dee5f91ef73c069f266ea",
+    "tile_hash": "55e61cb65b3a77569f82c24e472696de4fca71d69b02598bda34bf2197c559ac",
     "barycentric": [
-      0.2699327275122538,
-      0.40739204926097644,
-      0.32267522322676984
+      0.31646822099544003,
+      0.3357337482239626,
+      0.3477980307805973
     ],
-    "prev_block_hash": "e217c6c55bd3af38d7e834d6676b450f7abcc24a67a2a338ebfdad014a8d72d4",
-    "block_hash": "732147a0e6959c7bf583019e327f951028633843e431cf087bf18e99ccfcc8fd",
+    "prev_block_hash": "ca069a9139b450a9eeabe3834883b8ea576abe1a81fe52837bae686c233950d0",
+    "block_hash": "53467c84f91a7c0773bdbda62e7fe4e9d031ac0ea80aebc7173b628c50f12b78",
     "type": null,
     "anchors": null
   }

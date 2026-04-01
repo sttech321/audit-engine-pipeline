@@ -219,19 +219,41 @@ def kag_grid(mag64: List[int]) -> Dict[str, Any]:
     return {"kag_hash": canonical_hash(kag_obj), "separability": sep,
             "chart": kag_obj}
 
-def _pentagrid_tau(kag_hash: str) -> List[float]:
-    """kag_hash → five pentagrid offsets τ[0..4] ∈ [0,1)."""
-    bs = bytes.fromhex(kag_hash)
-    if len(bs) < 40:
-        # Expand to at least 40 bytes using chained hashing (deterministic).
-        h = hashlib.sha256(bs).digest()
-        material = bytearray(bs + h)
-        while len(material) < 40:
-            h = hashlib.sha256(h).digest()
-            material.extend(h)
-        bs = bytes(material[:40])
-    return [(int.from_bytes(bs[i*8:(i+1)*8], "little") % (1 << 53)) / float(1 << 53)
-            for i in range(5)]
+def compute_k5(kag_chart: Dict[str, Any], scale: float = 50.0) -> List[float]:
+    """
+    KAG chart → k ∈ ℝ⁵ world coordinates on the Penrose field.
+
+    Uses the first five row means relative to gmean as coordinate components.
+    No normalization to [0,1); magnitude is preserved up to scale.
+    """
+    row_means = kag_chart["row_means"]
+    gmean = float(kag_chart["gmean"])
+    k5_raw = [int(row_means[r] - gmean) for r in range(5)]
+    max_k = max(abs(k) for k in k5_raw)
+    if max_k == 0:
+        return [0.0] * 5
+    return [float(k * scale / max_k) for k in k5_raw]
+
+
+def k5_to_world_position(k5: List[float]) -> Tuple[float, float]:
+    """
+    k ∈ ℝ⁵ → 2D position on global Penrose field.
+    z = Σ k[r] · ω[r]  where ω[r] = exp(2πir/5)
+    """
+    x = sum(k5[r] * math.cos(2 * math.pi * r / 5) for r in range(5))
+    y = sum(k5[r] * math.sin(2 * math.pi * r / 5) for r in range(5))
+    return float(x), float(y)
+
+
+def _tau_pentagrid_from_k5(k5: List[float], scale: float = 50.0) -> List[float]:
+    """
+    Map k5 world coordinates to [0,1]⁵ pentagrid offsets for penrose_patch /
+    barycentric (backward compatible with legacy tau_pentagrid).
+    """
+    kk = (list(k5) + [0.0] * 5)[:5]
+    if max(abs(v) for v in kk) < 1e-15:
+        return [0.5] * 5
+    return [clamp01((kk[i] + scale) / (2.0 * scale)) for i in range(5)]
 
 def _intersect(ni, a, nj, b):
     det = ni[0]*nj[1] - ni[1]*nj[0]
@@ -240,10 +262,19 @@ def _intersect(ni, a, nj, b):
     y = (ni[0]*b  - nj[0]*a) / det
     return (x, y)
 
-def penrose_patch(kag_hash: str, N: int = 6,
-                  max_tiles: int = 384) -> Dict[str, Any]:
-    """Generate Penrose P3 patch from kag_hash (pentagrid cut-and-project)."""
-    tau    = _pentagrid_tau(kag_hash)
+ 
+def penrose_patch(tau: List[float], N: int = 6, max_tiles: int = 384) -> Dict[str, Any]:
+    """
+    Generate Penrose P3 patch from pentagrid offsets τ[0..4] (pentagrid cut-and-project).
+
+    Each tile = 4 pentagrid line intersections forming a proper rhombus.
+
+    τ is reduced mod 1 per family (fundamental domain). Integer ranges are centered on τ
+    like ``penrose_patch_raw`` so the five-fold hub stays near the patch mass center.
+    Tiles are then ranked by distance to that center and the closest ``max_tiles`` kept,
+    which yields a round, hub-centered patch (client mockup) instead of a square window.
+    """
+    tau5 = [(float(tau[k]) if k < len(tau) else 0.5) % 1.0 for k in range(5)]
     thetas = [k * 2 * math.pi / 5 for k in range(5)]
     normals = [(math.cos(t), math.sin(t)) for t in thetas]
     cache: Dict = {}
@@ -251,36 +282,60 @@ def penrose_patch(kag_hash: str, N: int = 6,
     def vertex(i, a, j, b):
         key = (i, a, j, b)
         if key in cache: return cache[key]
-        pt = _intersect(normals[i], a + tau[i], normals[j], b + tau[j])
+        # Shift each pentagrid family by its τ offset (periodic on [0,1))
+        pt = _intersect(normals[i], a + tau5[i], normals[j], b + tau5[j])
         cache[key] = pt
         return pt
 
-    tiles = []
+    tiles: List[Dict[str, Any]] = []
     for i in range(5):
-        for j in range(i+1, 5):
-            rtype = "thick" if (j-i) % 5 in (1, 4) else "thin"
-            for a in range(-N, N+1):
-                for b in range(-N, N+1):
-                    vs = [vertex(i,a,j,b), vertex(i,a+1,j,b),
-                          vertex(i,a+1,j,b+1), vertex(i,a,j,b+1)]
-                    if None in vs: continue
-                    tiles.append({"type": rtype, "v": vs})
+        for j in range(i + 1, 5):
+            rtype = "thick" if (j - i) % 5 in (1, 4) else "thin"
+            ai = round(tau5[i] * N * 2)
+            bj = round(tau5[j] * N * 2)
+            for m in range(ai - N, ai + N + 1):
+                for n in range(bj - N, bj + N + 1):
+                    v00 = vertex(i, m,     j, n    )
+                    v10 = vertex(i, m + 1, j, n    )
+                    v11 = vertex(i, m + 1, j, n + 1)
+                    v01 = vertex(i, m,     j, n + 1)
+                    if None in (v00, v10, v11, v01):
+                        continue
+                    cx = (v00[0] + v10[0] + v11[0] + v01[0]) * 0.25
+                    cy = (v00[1] + v10[1] + v11[1] + v01[1]) * 0.25
+                    tiles.append(
+                        {"type": rtype, "v": [v00, v10, v11, v01], "cx": cx, "cy": cy}
+                    )
 
     if not tiles:
-        return {"tau": tau, "tiles": [], "tile_count": 0,
-                "tile_hash": canonical_hash({"tau": tau, "tiles": []})}
+        return {"tau": tau5, "tiles": [], "tile_count": 0,
+                "tile_hash": canonical_hash({"tau": tau5, "tiles": []})}
+
+    m_cx = sum(t["cx"] for t in tiles) / len(tiles)
+    m_cy = sum(t["cy"] for t in tiles) / len(tiles)
+    tiles.sort(
+        key=lambda t: (t["cx"] - m_cx) ** 2 + (t["cy"] - m_cy) ** 2
+    )
+    tiles = tiles[:max_tiles]
 
     all_x = [v[0] for t in tiles for v in t["v"]]
     all_y = [v[1] for t in tiles for v in t["v"]]
     mx, mnx = max(all_x), min(all_x)
     my, mny = max(all_y), min(all_y)
-    sx, sy  = max(mx-mnx, 1e-12), max(my-mny, 1e-12)
-    norm_tiles = [{"type": t["type"],
-                   "v": [((vx-mnx)/sx, (vy-mny)/sy) for vx,vy in t["v"]]}
-                  for t in tiles[:max_tiles]]
-    return {"tau": tau, "tiles": norm_tiles,
-            "tile_count": len(norm_tiles),
-            "tile_hash":  canonical_hash({"tau": tau, "tiles": norm_tiles})}
+    sx, sy = max(mx - mnx, 1e-12), max(my - mny, 1e-12)
+
+    norm_tiles = [
+        {"type": t["type"],
+         "v": [((vx - mnx) / sx, (vy - mny) / sy) for vx, vy in t["v"]]}
+        for t in tiles
+    ]
+
+    return {
+        "tau": tau5,
+        "tiles": norm_tiles,
+        "tile_count": len(norm_tiles),
+        "tile_hash": canonical_hash({"tau": tau5, "tiles": norm_tiles})
+    }
 
 
 def penrose_patch_raw(tau: List[float], N: int = 6) -> List[Dict[str, Any]]:
@@ -430,7 +485,10 @@ def process_chunk(chunk: bytes) -> Dict[str, Any]:
     p   = padic_lift(g["exponents"], k=3)
     ntt = ntt_fingerprint(p["residues"], L=1024)
     kag = kag_grid(ntt["mag64"])
-    til = penrose_patch(kag["kag_hash"], N=6, max_tiles=384)
+    k5 = compute_k5(kag["chart"], scale=50.0)
+    wx, wy = k5_to_world_position(k5)
+    tau5 = _tau_pentagrid_from_k5(k5, scale=50.0)
+    til = penrose_patch(tau5, N=6, max_tiles=384)
     ms  = penrose_match_score(til)
 
     chain = {
@@ -452,6 +510,10 @@ def process_chunk(chunk: bytes) -> Dict[str, Any]:
         "manifold_hash": manifold_hash,
         "chain":         chain,
         "tiling":        til,
+        "k5":            k5,
+        "world_x":       float(wx),
+        "world_y":       float(wy),
+        "tau_pentagrid": tau5,
     }
 
 
@@ -518,7 +580,8 @@ def _const_to_tau5(value: float) -> List[float]:
     residues = padic_lift(g_comb, k=3)["residues"]
     ntt      = ntt_fingerprint(residues, L=1024)
     kag      = kag_grid(ntt["mag64"])
-    tau5     = _pentagrid_tau(kag["kag_hash"])
+    k5       = compute_k5(kag["chart"], scale=50.0)
+    tau5     = _tau_pentagrid_from_k5(k5, scale=50.0)
     return tau5
 
 def _harmonic_mean_tau5(tau5_list: List[List[float]]) -> List[float]:
@@ -614,7 +677,7 @@ def encode_bytes(raw: bytes, genesis: List[Dict],
         chunk   = (raw * repeats)[:CHUNK_BYTES]
 
     desc = process_chunk(chunk)
-    tau5 = _pentagrid_tau(desc["chain"]["kag_hash"])
+    tau5 = desc["tau_pentagrid"]
     tw   = sum(tau5) / 5.0
     bary = _barycentric(tau5, genesis)
     region = _dominant_region(bary, genesis)
@@ -641,13 +704,14 @@ def encode_integer(n: int, genesis: List[Dict], label: str = "") -> Dict[str, An
     residues = padic_lift(exps, k=3)["residues"]
     ntt      = ntt_fingerprint(residues, L=1024)
     kag      = kag_grid(ntt["mag64"])
-    tau5     = _pentagrid_tau(kag["kag_hash"])
+    k5       = compute_k5(kag["chart"], scale=50.0)
+    tau5     = _tau_pentagrid_from_k5(k5, scale=50.0)
     tw       = sum(tau5) / 5.0
     bary     = _barycentric(tau5, genesis)
     chain    = {"padic_hash": padic_lift(exps,3)["padic_hash"],
                 "ntt_hash": ntt["spec_hash"],
                 "kag_hash": kag["kag_hash"],
-                "penrose_hash": penrose_patch(kag["kag_hash"])["tile_hash"]}
+                "penrose_hash": penrose_patch(tau5)["tile_hash"]}
     return {
         "label":          label or str(n),
         "input_int":      n,
@@ -973,7 +1037,9 @@ def audit_file(path: str,
 
                 # Build rows in order (tau/bary in main thread for genesis consistency)
                 for (cidx, chunk), desc in zip(batch, desc_list):
-                    tau5 = _pentagrid_tau(desc["chain"]["kag_hash"])
+                    tau5 = desc["tau_pentagrid"]
+                    k5 = desc["k5"]
+                    wx, wy = desc["world_x"], desc["world_y"]
                     tw   = sum(tau5) / 5.0
                     bary = _barycentric(tau5, gm)
                     row = {
@@ -990,6 +1056,9 @@ def audit_file(path: str,
                         "manifold_hash": desc["manifold_hash"],
                         "tile_hash":    desc["tile_hash"],
                         "kag_hash":     desc["chain"]["kag_hash"],
+                        "k5":           k5,
+                        "world_x":      float(wx),
+                        "world_y":      float(wy),
                         "tau_pentagrid": tau5,
                         "tau_omega_norm": float(tw),
                         "barycentric":  bary,
@@ -1025,6 +1094,9 @@ def audit_file(path: str,
 
     # Global artifact map position derived from all chunks.
     # Sort by chunk_index so the seed is independent of processing order.
+    k5_avg: List[float] = [0.0] * 5
+    wx_map = 0.0
+    wy_map = 0.0
     if chunks:
         seed = hashlib.sha256()
         for c in sorted(chunks, key=lambda x: x["chunk_index"]):
@@ -1032,10 +1104,20 @@ def audit_file(path: str,
             if isinstance(kh, str) and kh:
                 seed.update(kh.encode("ascii"))
         combined_seed = seed.hexdigest()
-        tau_vectors = _pentagrid_tau(combined_seed)
+        sorted_chunks = sorted(chunks, key=lambda x: x["chunk_index"])
+        nch = len(sorted_chunks)
+        k5_agg = [0.0] * 5
+        for c in sorted_chunks:
+            ck = c.get("k5") or [0.0] * 5
+            for i in range(5):
+                k5_agg[i] += float(ck[i] if i < len(ck) else 0.0)
+        k5_avg = [k5_agg[i] / nch for i in range(5)]
+        wx_map = sum(float(c.get("world_x", 0.0)) for c in sorted_chunks) / nch
+        wy_map = sum(float(c.get("world_y", 0.0)) for c in sorted_chunks) / nch
+        tau_vectors = _tau_pentagrid_from_k5(k5_avg, scale=50.0)
         bary = _barycentric(tau_vectors, gm)
         manifold_hash = combined_seed
-        tile_hash = canonical_hash(tau_vectors)
+        tile_hash = canonical_hash({"tau": tau_vectors, "k5": k5_avg})
     else:
         tau_vectors = []
         bary = []
@@ -1044,6 +1126,9 @@ def audit_file(path: str,
 
     map_position = {
         "tau_vectors": tau_vectors,
+        "k5": k5_avg,
+        "world_x": float(wx_map),
+        "world_y": float(wy_map),
         "barycentric": bary,
         "manifold_hash": manifold_hash,
         "tile_hash": tile_hash,
@@ -1566,10 +1651,10 @@ def run_selftest() -> Dict[str, Any]:
         desc_c = process_chunk(counter_chunk(7))   # same process, different seed
         desc_r = process_chunk(bytes(rng.randint(0,255) for _ in range(CHUNK_BYTES)))
 
-        tau_a  = _pentagrid_tau(desc_a["chain"]["kag_hash"])
-        tau_b  = _pentagrid_tau(desc_b["chain"]["kag_hash"])
-        tau_c  = _pentagrid_tau(desc_c["chain"]["kag_hash"])
-        tau_r  = _pentagrid_tau(desc_r["chain"]["kag_hash"])
+        tau_a  = desc_a["tau_pentagrid"]
+        tau_b  = desc_b["tau_pentagrid"]
+        tau_c  = desc_c["tau_pentagrid"]
+        tau_r  = desc_r["tau_pentagrid"]
 
         def dist5(x, y): return math.sqrt(sum((x[i]-y[i])**2 for i in range(5)))
 
