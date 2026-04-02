@@ -256,7 +256,7 @@ class ExtendedAuditResult(BaseModel):
     ledger: Optional[LedgerInfo] = None
     legal_disclosures: LegalDisclosures
     
-    # Penrose P3 details
+    # Penrose P3 details (k5, tau_vectors, chunk_positions for SVG pipeline coloring, …)
     penrose_details: Optional[Dict[str, Any]] = None
 
     # Artifact map coordinates

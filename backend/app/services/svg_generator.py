@@ -468,9 +468,14 @@ def generate_penrose_svg_viewport(
     visual_theme: str = DEFAULT_VIEWPORT_VISUAL_THEME,
 ) -> str:
     """
-    Viewport: single mint mesh (Field v6 isometry pipeline). Tiles are coloured
-    by distance from the patch centroid—round gold core, steel fog when the chain
-    visited nearby, dark blue rim—matching the client tile-view mockup.
+    Viewport: Field v6 mint mesh merged with background, then paired to P3 rhombi.
+
+    When ``penrose_data`` includes ``chunk_positions`` (from ``extract_penrose_from_report``),
+    each rhombus is colored from the audit pipeline: KAG separability gold↔teal gradient
+    on tiles that received a nearest chunk, red for anomaly-flagged chunks, dark fill for
+    empty regions. Chunk world positions are rotated by ``theta_opt`` before matching so
+    they align with the isometry-aligned patch. Without ``chunk_positions``, falls back to
+    centroid banding (gold core / navy rim) for backward compatibility.
     """
     del viewport_radius, tau_window_delta  # retained for API compatibility
 
@@ -531,28 +536,6 @@ def generate_penrose_svg_viewport(
             show_hash=True,
         )
 
-    visit_xy: List[Tuple[float, float]] = []
-    for block in chain or []:
-        if block.get("type") == "GENESIS":
-            continue
-        bk = block.get("k5")
-        if isinstance(bk, list) and len(bk) >= 5:
-            kb = [float(bk[i]) for i in range(5)]
-        else:
-            tv = block.get("tau_vectors") or []
-            if not tv:
-                continue
-            tvf = [float(x) for x in tv if isinstance(x, (int, float))]
-            if not tvf:
-                continue
-            kb = _approx_k5_from_tau(tvf)
-        visit_xy.append(k5_to_world_position(kb))
-
-    visit_radius = 3.0
-
-    def near_visit(cx: float, cy: float) -> bool:
-        return any(math.hypot(cx - px, cy - py) < visit_radius for px, py in visit_xy)
-
     # Mint-centric framing (matches client canvas “tile view”): a global bbox often
     # shrinks scale to sub-pixel rhombi while the compass stays visible in px space.
     xs: List[float] = []
@@ -602,6 +585,59 @@ def generate_penrose_svg_viewport(
         for r in mint_rhombi
         if r.get("center")
         and math.hypot(r["center"].real - apex_x, r["center"].imag - apex_y) < fig_r
+    )
+
+    # Pipeline-driven coloring: map audit chunks to nearest rhombus in the *aligned*
+    # patch frame (same rotation theta_opt as _build_mint_patch).
+    chunk_pos: List[Dict[str, Any]] = []
+    raw_cp = penrose_data.get("chunk_positions")
+    if not isinstance(raw_cp, list):
+        raw_cp = penrose_data.get("chunkPositions")
+    if isinstance(raw_cp, list):
+        for cp in raw_cp:
+            if not isinstance(cp, dict):
+                continue
+            try:
+                chunk_pos.append(
+                    {
+                        "wx": float(cp.get("wx", 0.0)),
+                        "wy": float(cp.get("wy", 0.0)),
+                        "sep": float(cp.get("sep", 0.0)),
+                        "ent": float(cp.get("ent", 0.0)),
+                        "ano": bool(cp.get("ano", False)),
+                    }
+                )
+            except (TypeError, ValueError):
+                continue
+
+    viz_mode = "pipeline" if chunk_pos else "legacy"
+
+    cos_t, sin_t = math.cos(theta_opt), math.sin(theta_opt)
+    tile_chunks: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    if chunk_pos:
+        centers_nn: List[Tuple[int, float, float]] = []
+        for ri, r in enumerate(mint_rhombi):
+            cen = r.get("center")
+            if cen is not None:
+                centers_nn.append((ri, cen.real, cen.imag))
+        for cp in chunk_pos:
+            wx, wy = cp["wx"], cp["wy"]
+            rx = wx * cos_t - wy * sin_t
+            ry = wx * sin_t + wy * cos_t
+            best_ri = -1
+            best_d2 = float("inf")
+            for ri, cx, cy in centers_nn:
+                d2 = (rx - cx) ** 2 + (ry - cy) ** 2
+                if d2 < best_d2:
+                    best_d2 = d2
+                    best_ri = ri
+            if best_ri >= 0:
+                tile_chunks[best_ri].append(cp)
+
+    figure_count = (
+        sum(1 for ri in range(n_mint) if tile_chunks.get(ri))
+        if chunk_pos
+        else n_figure
     )
 
     svg = [
@@ -663,33 +699,52 @@ def generate_penrose_svg_viewport(
                 f'stroke-linecap="round"/>'
             )
 
-    # One mesh: figure (gold core) + fog (steel) + base (navy-blue rhombi).
-    def _band(r: Dict[str, Any]) -> str:
-        c = r.get("center")
-        if c is None:
-            return "base"
-        d = math.hypot(c.real - apex_x, c.imag - apex_y)
-        if d < fig_r:
-            return "figure"
-        if near_visit(c.real, c.imag):
-            return "fog"
-        return "base"
+    def _tile_color(ri: int, rh: Dict[str, Any]) -> Tuple[str, str, float, float, float, float]:
+        """Return (base, stroke, stroke_op, stroke_w, bar_op, bar_w) from pipeline or legacy fallbacks."""
+        mapped = tile_chunks.get(ri, [])
+        thick = rh["type"] == "thick"
 
-    for band_name in ("base", "fog", "figure"):
-        for r in mint_rhombi:
-            if _band(r) != band_name:
-                continue
-            thick = r["type"] == "thick"
-            if band_name == "figure":
+        if not chunk_pos:
+            c = rh.get("center")
+            if c and math.hypot(c.real - apex_x, c.imag - apex_y) < fig_r:
                 base = "#f59e0b" if thick else "#fcd34d"
-                _emit_rh(r, base, "#7c2d12", 0.55, 0.75, 0.70, 0.55)
-            elif band_name == "fog":
-                base = "#2d5a8e" if thick else "#264d7a"
-                # No Ammann bars outside the gold core (avoids aliasing “black triangles” at small scale)
-                _emit_rh(r, base, "#1e293b", 0.32, 0.35, 0.00, 0.00)
-            else:
-                base = "#24364f" if thick else "#1f2f46"
-                _emit_rh(r, base, "#1e293b", 0.32, 0.35, 0.00, 0.00)
+                return base, "#7c2d12", 0.55, 0.75, 0.70, 0.55
+            base = "#24364f" if thick else "#1f2f46"
+            return base, "#1e293b", 0.32, 0.35, 0.0, 0.0
+
+        if not mapped:
+            base = "#1a2332" if thick else "#161e2d"
+            return base, "#1e293b", 0.20, 0.30, 0.0, 0.0
+
+        n_map = len(mapped)
+        avg_sep = sum(c["sep"] for c in mapped) / n_map
+        has_anomaly = any(c["ano"] for c in mapped)
+        density = min(
+            1.0,
+            (n_map / max(1, len(chunk_pos))) * len(mint_rhombi) * 0.5,
+        )
+
+        if has_anomaly:
+            base = "#ef4444" if thick else "#f87171"
+            return base, "#7f1d1d", 0.65, 0.80, 0.0, 0.0
+
+        t_sep = min(1.0, max(0.0, avg_sep))
+        if thick:
+            gold = (245, 158, 11)
+            teal = (20, 184, 166)
+        else:
+            gold = (252, 211, 77)
+            teal = (94, 234, 212)
+        rr = int(gold[0] * t_sep + teal[0] * (1.0 - t_sep))
+        gg = int(gold[1] * t_sep + teal[1] * (1.0 - t_sep))
+        bb = int(gold[2] * t_sep + teal[2] * (1.0 - t_sep))
+        base = f"#{rr:02x}{gg:02x}{bb:02x}"
+        bar_op = 0.50 * density if density > 0.3 else 0.0
+        return base, "#7c2d12", 0.45 + 0.20 * density, 0.60, bar_op, 0.45
+
+    for ri, r in enumerate(mint_rhombi):
+        b, st, so, sw, bo, bw = _tile_color(ri, r)
+        _emit_rh(r, b, st, so, sw, bo, bw)
 
     gm = build_genesis()["genesis_mints"]
     g_info = [
@@ -726,6 +781,27 @@ def generate_penrose_svg_viewport(
             f'{g["label"]}</text>'
         )
 
+    if chunk_pos:
+        ly = SVG_HEIGHT - 68
+        svg.append(
+            f'  <rect x="8" y="{ly}" width="130" height="28" rx="4" '
+            f'fill="#0f172a" fill-opacity="0.85" stroke="#334155" stroke-width="0.5"/>'
+        )
+        for i, (col, label) in enumerate(
+            [
+                ("#f59e0b", "high KAG"),
+                ("#14b8a6", "low KAG"),
+                ("#ef4444", "anom."),
+            ]
+        ):
+            x = 14 + i * 40
+            svg.append(
+                f'  <rect x="{x:.0f}" y="{ly + 6:.0f}" width="8" height="8" rx="1" fill="{col}"/>'
+            )
+            svg.append(
+                f'  <text x="{x + 11:.0f}" y="{ly + 14:.0f}" fill="#94a3b8" font-size="6">{label}</text>'
+            )
+
     deg = round(math.degrees(theta_opt)) % 360
     svg.extend(
         [
@@ -742,7 +818,7 @@ def generate_penrose_svg_viewport(
             [
                 f'  <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="#94a3b8" '
                 f'font-size="9">Field v6 · chain={chain_len} · tiles={n_mint} · '
-                f'figure={n_figure} · θ={deg}° · align={align_score} · {theme}</text>',
+                f'figure={figure_count} · θ={deg}° · align={align_score} · {theme} · {viz_mode}</text>',
                 f'  <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT-10}" text-anchor="middle" '
                 f'fill="#475569" font-size="8">τ=[{tau_str}...] · {penrose_hash}</text>',
             ]

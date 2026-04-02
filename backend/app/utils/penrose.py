@@ -2,7 +2,7 @@
 Extract Penrose visualization parameters from RIM-OS audit report.
 
 Each audit produces a unique, deterministic Penrose fingerprint derived from
-the first chunk's manifold geometry and the ledger state.
+manifold geometry (preferring aggregated ``map_position``) and the ledger state.
 """
 from typing import Any, Dict, List
 
@@ -13,26 +13,44 @@ def extract_penrose_from_report(report: Dict[str, Any], fallback_hash: str = "")
     """
     Extract Penrose mint parameters from RIM-OS audit report.
 
-    Returns k5 world coordinates (not hash-normalized τ) for correct
-    positioning on the global Penrose field.
+    Uses ``report[\"map_position\"]`` for k5 / τ / world anchor when present
+    (aggregated across chunks); otherwise falls back to the first chunk.
+
+    Adds ``chunk_positions``: lightweight summaries for pipeline-driven SVG coloring.
     """
     chunks = report.get("chunks", [])
     first_chunk = chunks[0] if chunks else {}
+    mp = report.get("map_position") or {}
 
-    k5 = first_chunk.get("k5")
+    # Prefer aggregated map_position k5 (proper multi-chunk average).
+    k5 = mp.get("k5")
     if not isinstance(k5, list) or len(k5) < 5:
-        k5 = [0.0] * 5
+        k5 = first_chunk.get("k5")
+        if not isinstance(k5, list) or len(k5) < 5:
+            k5 = [0.0] * 5
+        else:
+            k5 = [float(k5[i]) for i in range(5)]
     else:
         k5 = [float(k5[i]) for i in range(5)]
 
-    wx = float(first_chunk.get("world_x", 0.0))
-    wy = float(first_chunk.get("world_y", 0.0))
-
-    tau_pent = first_chunk.get("tau_pentagrid")
-    if isinstance(tau_pent, list) and len(tau_pent) >= 5:
-        tau_vectors: List[float] = [float(tau_pent[i]) for i in range(5)]
+    if isinstance(mp, dict) and "world_x" in mp:
+        wx = float(mp["world_x"])
     else:
-        tau_vectors = _tau_pentagrid_from_k5(k5, scale=50.0)
+        wx = float(first_chunk.get("world_x", 0.0))
+    if isinstance(mp, dict) and "world_y" in mp:
+        wy = float(mp["world_y"])
+    else:
+        wy = float(first_chunk.get("world_y", 0.0))
+
+    tau_from_map = mp.get("tau_vectors")
+    if isinstance(tau_from_map, list) and len(tau_from_map) >= 5:
+        tau_vectors: List[float] = [float(tau_from_map[i]) for i in range(5)]
+    else:
+        tau_pent = first_chunk.get("tau_pentagrid")
+        if isinstance(tau_pent, list) and len(tau_pent) >= 5:
+            tau_vectors = [float(tau_pent[i]) for i in range(5)]
+        else:
+            tau_vectors = _tau_pentagrid_from_k5(k5, scale=50.0)
 
     barycentric = first_chunk.get("barycentric", [0.0, 0.0, 0.0])
     if not isinstance(barycentric, list):
@@ -47,6 +65,28 @@ def extract_penrose_from_report(report: Dict[str, Any], fallback_hash: str = "")
     tau_omega = float(first_chunk.get("tau_omega_norm", 0.5))
     theta = float(barycentric[0]) if barycentric else 0.0
 
+    anomaly_indices = {int(a["chunk_index"]) for a in report.get("anomalies", [])
+                       if isinstance(a, dict) and "chunk_index" in a}
+    chunk_positions: List[Dict[str, Any]] = []
+    for c in chunks:
+        if not isinstance(c, dict):
+            continue
+        ck5 = c.get("k5")
+        if not isinstance(ck5, list) or len(ck5) < 5:
+            continue
+        idx = c.get("chunk_index", -1)
+        try:
+            ci = int(idx) if idx is not None else -1
+        except (TypeError, ValueError):
+            ci = -1
+        chunk_positions.append({
+            "wx": float(c.get("world_x", 0.0)),
+            "wy": float(c.get("world_y", 0.0)),
+            "sep": float(c.get("separability", 0.0)),
+            "ent": float(c.get("entropy_bits", 0.0)),
+            "ano": ci in anomaly_indices,
+        })
+
     return {
         "k5": k5,
         "world_x": wx,
@@ -56,6 +96,7 @@ def extract_penrose_from_report(report: Dict[str, Any], fallback_hash: str = "")
         "tile_hash": (first_chunk.get("tile_hash")
                       or (next_state[:16] if next_state else "")),
         "tau_vectors": tau_vectors,
+        "chunk_positions": chunk_positions,
         # Legacy / chart-style API
         "r": tau_omega,
         "theta": theta,

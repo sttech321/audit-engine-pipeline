@@ -380,7 +380,7 @@ async def upload_audit_file(
             entry_hash=ledger.get("events_hash", file_hash),
         )
 
-        # Penrose parameters from first chunk manifold geometry (unique per audit)
+        # Penrose: k5/τ prefer map_position; chunk_positions for pipeline-driven SVG (SVG-VIS-007).
         from app.utils.penrose import extract_penrose_from_report
 
         penrose_details = extract_penrose_from_report(report, fallback_hash=file_hash)

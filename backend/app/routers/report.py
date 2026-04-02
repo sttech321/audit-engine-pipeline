@@ -116,6 +116,15 @@ def _generate_chain_view_svg(cached: ExtendedAuditResult) -> Optional[str]:
     penrose_data = dict(cached.penrose_details)
     if not penrose_data.get("tau_vectors") and cached.map_position:
         penrose_data["tau_vectors"] = list(cached.map_position.tau_vectors or [])
+    # Clients / older caches may use camelCase; renderer expects chunk_positions.
+    if not penrose_data.get("chunk_positions") and penrose_data.get("chunkPositions"):
+        penrose_data["chunk_positions"] = penrose_data["chunkPositions"]
+    _cp = penrose_data.get("chunk_positions")
+    if not isinstance(_cp, list) or len(_cp) == 0:
+        logger.info(
+            "SVG viewport: no chunk_positions in cached penrose_details "
+            "(re-upload after SVG-VIS-007 for pipeline-driven tile colors)"
+        )
 
     chain = get_artifact_chain()
 

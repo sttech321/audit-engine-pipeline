@@ -487,6 +487,7 @@ class ChunkedUploadService:
                 audit_content_sha256=integrity_block.get("audit_content_sha256", file_hash),
                 entry_hash=ledger.get("events_hash", file_hash),
             )
+            # chunk_positions in penrose_details feeds generate_penrose_svg_viewport (SVG-VIS-007).
             penrose_details = extract_penrose_from_report(report, fallback_hash=file_hash)
             extended = ExtendedAuditResult(
                 kpis=mock_kpis,
