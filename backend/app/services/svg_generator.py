@@ -410,7 +410,7 @@ def _build_mint_patch(
 
     mint_tris = snap_triangles(
         [
-            (color, _rot(A), _rot(B), _rot(C))
+            (color, _rot(A - apex) + apex, _rot(B - apex) + apex, _rot(C - apex) + apex)
             for (color, A, B, C) in input_tris
         ]
     )
@@ -649,14 +649,16 @@ def generate_penrose_svg_viewport(
         path = _rhombus_path_screen(rh, cx_off, cy_off, scale)
         svg.append(
             f'    <path d="{path}" fill="{fill}" stroke="{stroke}" '
-            f'stroke-opacity="{stro_op:.2f}" stroke-width="{stro_w:.2f}"/>'
+            f'stroke-opacity="{stro_op:.2f}" stroke-width="{stro_w:.2f}" '
+            f'stroke-linejoin="round"/>'
         )
         for (a, b) in _ammann_segments_complex(rh):
             x1, y1 = cx_off + a[0] * scale, cy_off + a[1] * scale
             x2, y2 = cx_off + b[0] * scale, cy_off + b[1] * scale
             svg.append(
                 f'    <line x1="{x1:.4f}" y1="{y1:.4f}" x2="{x2:.4f}" y2="{y2:.4f}" '
-                f'stroke="#facc15" stroke-opacity="{bar_op:.2f}" stroke-width="{bar_w:.2f}"/>'
+                f'stroke="#facc15" stroke-opacity="{bar_op:.2f}" stroke-width="{bar_w:.2f}" '
+                f'stroke-linecap="round"/>'
             )
 
     # One mesh: figure (gold core) + fog (steel) + base (navy-blue rhombi).
@@ -681,10 +683,10 @@ def generate_penrose_svg_viewport(
                 _emit_rh(r, base, "#7c2d12", 0.55, 0.75, 0.70, 0.55)
             elif band_name == "fog":
                 base = "#2d5a8e" if thick else "#264d7a"
-                _emit_rh(r, base, "#0b1220", 0.45, 0.85, 0.60, 0.55)
+                _emit_rh(r, base, "#0b1220", 0.40, 0.40, 0.30, 0.30)
             else:
                 base = "#24364f" if thick else "#1f2f46"
-                _emit_rh(r, base, "#0b1220", 0.55, 0.85, 0.55, 0.55)
+                _emit_rh(r, base, "#0b1220", 0.45, 0.40, 0.00, 0.30)
 
     gm = build_genesis()["genesis_mints"]
     g_info = [
