@@ -11,9 +11,8 @@ TWO_PI = 2 * PI
 
 def _sun_seed() -> List[Tuple[int, complex, complex, complex]]:
     """
-    Generate star seed: 10 blue triangles = 5 thick rhombi around center.
-    Blue triangle: (1, A, B, C) with 108° at A, 36° at B and C.
-    For 36° at center (B=0): 10 blue with apex at 0.
+    Generate star seed: 10 Robinson red triangles (type 0) in the sun.
+    Must match the Field v6 reference seed convention.
     """
     triangles = []
     for i in range(10):
@@ -24,7 +23,7 @@ def _sun_seed() -> List[Tuple[int, complex, complex, complex]]:
         C = complex(math.cos(angle_c), math.sin(angle_c))
         if i % 2 == 1:
             B, C = C, B
-        triangles.append((1, 0j, B, C))
+        triangles.append((0, 0j, B, C))
     return triangles
 
 
@@ -124,10 +123,12 @@ def _triangles_to_rhombi_v2(
             return (pa, pb)
         return (pb, pa)
 
+    # Robinson pairing rule: two same-colored triangles form a P3 rhombus only when
+    # they share the *base* edge (B–C), opposite the apex at A.
     edge_to_tris: Dict[Tuple[Tuple[int, int], Tuple[int, int]], List[Tuple[int, int]]] = {}
-    for idx, (col, A, B, C) in enumerate(triangles):
-        for e in (normalize_edge(A, B), normalize_edge(B, C), normalize_edge(C, A)):
-            edge_to_tris.setdefault(e, []).append((idx, col))
+    for idx, (col, _A, B, C) in enumerate(triangles):
+        e = normalize_edge(B, C)
+        edge_to_tris.setdefault(e, []).append((idx, col))
 
     paired: set[int] = set()
     for _edge, tri_list in edge_to_tris.items():
@@ -173,8 +174,8 @@ def _inflate_penrose_triangles(
     seed_str: str, iterations: int = 6
 ) -> List[Tuple[int, complex, complex, complex]]:
     """
-    Inflate from the legacy blue sun seed with hash rotation; return triangles only.
-    Pairing is separate so multiple patches can be merged before _triangles_to_rhombi_v2().
+    Inflate from the sun seed with hash rotation; return triangles only.
+    Pairing is separate so multiple patches can be merged before `_triangles_to_rhombi_v2()`.
     """
     triangles = _sun_seed()
 

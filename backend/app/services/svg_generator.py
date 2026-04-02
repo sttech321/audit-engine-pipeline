@@ -650,8 +650,10 @@ def generate_penrose_svg_viewport(
         svg.append(
             f'    <path d="{path}" fill="{fill}" stroke="{stroke}" '
             f'stroke-opacity="{stro_op:.2f}" stroke-width="{stro_w:.2f}" '
-            f'stroke-linejoin="round"/>'
+            f'stroke-linejoin="round" stroke-linecap="round"/>'
         )
+        if bar_op <= 0.0 or bar_w <= 0.0:
+            return
         for (a, b) in _ammann_segments_complex(rh):
             x1, y1 = cx_off + a[0] * scale, cy_off + a[1] * scale
             x2, y2 = cx_off + b[0] * scale, cy_off + b[1] * scale
@@ -683,10 +685,11 @@ def generate_penrose_svg_viewport(
                 _emit_rh(r, base, "#7c2d12", 0.55, 0.75, 0.70, 0.55)
             elif band_name == "fog":
                 base = "#2d5a8e" if thick else "#264d7a"
-                _emit_rh(r, base, "#0b1220", 0.40, 0.40, 0.30, 0.30)
+                # No Ammann bars outside the gold core (avoids aliasing “black triangles” at small scale)
+                _emit_rh(r, base, "#1e293b", 0.32, 0.35, 0.00, 0.00)
             else:
                 base = "#24364f" if thick else "#1f2f46"
-                _emit_rh(r, base, "#0b1220", 0.45, 0.40, 0.00, 0.30)
+                _emit_rh(r, base, "#1e293b", 0.32, 0.35, 0.00, 0.00)
 
     gm = build_genesis()["genesis_mints"]
     g_info = [

@@ -173,7 +173,7 @@ async def read_file_streaming(
             total_size = 0
             chunk_size = 1 * 1024 * 1024  # 1 MiB chunks (RIMOS spec compliant)
             
-            while True:
+            while True: 
                 chunk = await file.read(chunk_size)
                 if not chunk:
                     break
