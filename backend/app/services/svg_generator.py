@@ -357,67 +357,61 @@ def _build_mint_patch(
     inflate_after_rotate: int = 3,
 ) -> Tuple[List[Tuple[int, complex, complex, complex]], float, int]:
     """
-    Match client Penrose Field v6 reference (deflation → isometry → inflation).
+    SVG-VIS-008: coherent tiling from a SINGLE global seed.
 
-    Returns **triangles** only; pair with `_triangles_to_rhombi_v2` after merging with
-    the background triangle list so boundary edges get partners.
+    Inflate one origin-centered sun scaled large enough to cover the input position,
+    subdivide until tiles are fine enough, then crop to a viewport around the input.
 
-    - Canonical seed at origin: `canonical_seed_tris` (sun + subdivisions).
-    - Input sun at k5 world position + `inflate_pre_align` subdivisions.
-    - Alignment: translate to sun apex, scale by PHI², rotate vs canonical vertices.
-    - Mint: rotate the *unscaled* input patch by the best angle, then
-      `inflate_after_rotate` further subdivisions (defaults 3+3 → 6 with ``VIEWPORT_SUBDIV_ITERS``).
+    Notes:
+    - `canonical_seed_tris` is retained for API compatibility (unused).
+    - `inflate_pre_align` / `inflate_after_rotate` are retained; their sum provides a
+      baseline subdivision depth, and we add extra iters as scale grows.
     """
+    del canonical_seed_tris  # unused in global-seed viewport generation
+
     wx, wy = k5_to_world_position(k5)
+    input_dist = math.hypot(wx, wy)
 
-    input_tris = _sun_seed_at(wx, wy)
-    for _ in range(inflate_pre_align):
-        input_tris = snap_triangles(_subdivide(input_tris))
+    # Client invariance rule: keep the Penrose field global and absolute.
+    # Using a scale proportional to input_dist normalizes the sampling radius and can
+    # make different inputs look artificially similar. Prefer a fixed global scale
+    # that covers the expected working region; only grow beyond it if absolutely needed.
+    GLOBAL_FIELD_SCALE = 22.0
+    scale_factor = max(2.0, GLOBAL_FIELD_SCALE)
+    if input_dist > scale_factor * 0.95:
+        # Extremely distant inputs: expand enough to include them (best-effort).
+        # This trades strict invariance for not returning an empty viewport.
+        scale_factor = input_dist * 1.2
 
-    deflate = PHI**2
+    # Start with origin sun, scaled.
+    tris = _sun_seed_field_v6(0j)
+    tris = [(c, A * scale_factor, B * scale_factor, C * scale_factor) for (c, A, B, C) in tris]
 
-    def vkey_vert(v: complex) -> str:
-        return f"{round(v.real)},{round(v.imag)}"
+    # Subdivide until tiles are fine enough. Larger scale needs more iters.
+    total_iters = int(inflate_pre_align + inflate_after_rotate)
+    extra = max(0, int(round(math.log(scale_factor) / math.log(PHI)))) if scale_factor > 1.0 else 0
+    total_iters = max(total_iters, total_iters + extra)
 
-    seed_verts = {
-        vkey_vert(v)
-        for (_, A, B, C) in canonical_seed_tris
-        for v in (A, B, C)
-    }
+    for _ in range(total_iters):
+        tris = snap_triangles(_subdivide(tris))
 
-    apex = complex(wx, wy)
-    best_angle = 0.0
-    best_score = -1
-    for k in range(5):
-        angle = k * 2 * math.pi / 5
-        c, s = math.cos(angle), math.sin(angle)
-        score = 0
-        for (_, A, B, C) in input_tris:
-            for v in (A, B, C):
-                w = deflate * (v - apex)
-                score += int(
-                    vkey_vert(complex(w.real * c - w.imag * s, w.real * s + w.imag * c))
-                    in seed_verts
-                )
-        if score > best_score:
-            best_score = score
-            best_angle = angle
+    # Crop to viewport around input position.
+    sample = tris[: min(10, len(tris))]
+    if sample:
+        edges = [abs(B - A) for _, A, B, C in sample]
+        avg_edge = sum(edges) / max(1, len(edges))
+    else:
+        avg_edge = 0.05
+    viewport_r = avg_edge * 18.0
 
-    c, s = math.cos(best_angle), math.sin(best_angle)
+    cropped: List[Tuple[int, complex, complex, complex]] = []
+    for col, A, B, C in tris:
+        cx = (A.real + B.real + C.real) / 3.0
+        cy = (A.imag + B.imag + C.imag) / 3.0
+        if math.hypot(cx - wx, cy - wy) < viewport_r:
+            cropped.append((col, A, B, C))
 
-    def _rot(z: complex) -> complex:
-        return complex(z.real * c - z.imag * s, z.real * s + z.imag * c)
-
-    mint_tris = snap_triangles(
-        [
-            (color, _rot(A - apex) + apex, _rot(B - apex) + apex, _rot(C - apex) + apex)
-            for (color, A, B, C) in input_tris
-        ]
-    )
-    for _ in range(inflate_after_rotate):
-        mint_tris = snap_triangles(_subdivide(mint_tris))
-
-    return mint_tris, best_angle, best_score
+    return cropped, 0.0, len(cropped)
 
 
 # Alias for callers / docs: mint pipeline returns triangles only, single pairing after merge.
@@ -440,9 +434,10 @@ def _rhombus_path_screen(
     if len(verts) != 4:
         return ""
     pts = [(cx_off + v.real * scale, cy_off + v.imag * scale) for v in verts]
-    d = f"M {pts[0][0]:.4f},{pts[0][1]:.4f}"
+    # 2–3 decimals is visually identical at 400×400 but reduces SVG size a lot.
+    d = f"M {pts[0][0]:.2f},{pts[0][1]:.2f}"
     for px, py in pts[1:]:
-        d += f" L {px:.4f},{py:.4f}"
+        d += f" L {px:.2f},{py:.2f}"
     return d + " Z"
 
 
@@ -505,23 +500,26 @@ def generate_penrose_svg_viewport(
     if theme not in (VIEWPORT_VISUAL_THEME_REFERENCE, VIEWPORT_VISUAL_THEME_SPEC):
         theme = VIEWPORT_VISUAL_THEME_REFERENCE
 
-    # Merge triangle soups, then ONE pairing pass (boundary triangles get neighbours).
-    # Same subdivision depth everywhere: VIEWPORT_SUBDIV_ITERS (canonical seed,
-    # background sun, mint: pre_align + post_rotate = iters).
-    canonical_seed_tris = _build_canonical_seed(iters=VIEWPORT_SUBDIV_ITERS)
+    # SVG-VIS-008 / client invariant rule:
+    # The Penrose field is global; the input only defines the viewport center.
+    # Use world_x/world_y as the viewport center when present (same frame as chunk_positions).
+    wx_k5, wy_k5 = k5_to_world_position(k5)
+    try:
+        wx_in = float(penrose_data.get("world_x", wx_k5))
+    except (TypeError, ValueError):
+        wx_in = wx_k5
+    try:
+        wy_in = float(penrose_data.get("world_y", wy_k5))
+    except (TypeError, ValueError):
+        wy_in = wy_k5
     mint_tris, theta_opt, align_score = _build_mint_patch_triangles(
         k5,
-        canonical_seed_tris,
+        canonical_seed_tris=[],
         inflate_pre_align=3,
         inflate_after_rotate=VIEWPORT_SUBDIV_ITERS - 3,
     )
-    bg_full = _viewport_background_field_tris(VIEWPORT_SUBDIV_ITERS)
-    mx0, mx1, my0, my1 = _aabb_of_triangles(mint_tris)
-    pad = max(mx1 - mx0, my1 - my0, 1e-6) * 0.35 + 0.5
-    bg_tris = _filter_tris_overlapping_aabb(bg_full, mx0, mx1, my0, my1, pad)
-    merged_tris = dedupe_robinson_triangles(bg_tris + mint_tris)
-    merged_tris = snap_triangles(merged_tris)
-    mint_rhombi = _triangles_to_rhombi_v2(merged_tris)
+    mint_tris = snap_triangles(mint_tris)
+    mint_rhombi = _triangles_to_rhombi_v2(mint_tris)
 
     if not mint_rhombi:
         return generate_penrose_svg(
@@ -530,6 +528,20 @@ def generate_penrose_svg_viewport(
             show_labels=show_labels,
             show_hash=True,
         )
+
+    # Performance: cap rendered rhombi count deterministically so the SVG stays
+    # lightweight enough for the web UI to load quickly.
+    # Keep the closest tiles to the input anchor (sun-centered framing).
+    MAX_RHOMBI = 1000
+    if len(mint_rhombi) > MAX_RHOMBI:
+        anchor_c = complex(wx_in, wy_in)
+
+        def _k(r: Dict[str, Any]) -> Tuple[float, float, float]:
+            c = r.get("center") or anchor_c
+            d = abs(c - anchor_c)
+            return (d, round(c.real, 6), round(c.imag, 6))
+
+        mint_rhombi = sorted(mint_rhombi, key=_k)[:MAX_RHOMBI]
 
     visit_xy: List[Tuple[float, float]] = []
     for block in chain or []:
@@ -574,8 +586,7 @@ def generate_penrose_svg_viewport(
     span_raw = max(x_hi - x_lo, y_hi - y_lo, 4.0)
     pad = span_raw * 0.20
     span = span_raw + 2 * pad
-    vp_cx = (x_lo + x_hi) * 0.5
-    vp_cy = (y_lo + y_hi) * 0.5
+    vp_cx, vp_cy = wx_in, wy_in
     scale = (SVG_WIDTH * 0.90) / span
     cx_off = SVG_CENTER_X - vp_cx * scale
     cy_off = SVG_CENTER_Y - vp_cy * scale
@@ -658,38 +669,113 @@ def generate_penrose_svg_viewport(
             x1, y1 = cx_off + a[0] * scale, cy_off + a[1] * scale
             x2, y2 = cx_off + b[0] * scale, cy_off + b[1] * scale
             svg.append(
-                f'    <line x1="{x1:.4f}" y1="{y1:.4f}" x2="{x2:.4f}" y2="{y2:.4f}" '
+                f'    <line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
                 f'stroke="#facc15" stroke-opacity="{bar_op:.2f}" stroke-width="{bar_w:.2f}" '
                 f'stroke-linecap="round"/>'
             )
 
-    # One mesh: figure (gold core) + fog (steel) + base (navy-blue rhombi).
-    def _band(r: Dict[str, Any]) -> str:
-        c = r.get("center")
-        if c is None:
-            return "base"
-        d = math.hypot(c.real - apex_x, c.imag - apex_y)
-        if d < fig_r:
-            return "figure"
-        if near_visit(c.real, c.imag):
-            return "fog"
-        return "base"
+    # SVG-VIS-007: pipeline-driven coloring from chunk_positions when present.
+    raw_cp = penrose_data.get("chunk_positions")
+    if not isinstance(raw_cp, list):
+        raw_cp = penrose_data.get("chunkPositions")
 
-    for band_name in ("base", "fog", "figure"):
-        for r in mint_rhombi:
-            if _band(r) != band_name:
+    chunk_pos: List[Dict[str, Any]] = []
+    if isinstance(raw_cp, list):
+        for cp in raw_cp:
+            if not isinstance(cp, dict):
                 continue
-            thick = r["type"] == "thick"
-            if band_name == "figure":
+            try:
+                chunk_pos.append(
+                    {
+                        "wx": float(cp.get("wx", 0.0)),
+                        "wy": float(cp.get("wy", 0.0)),
+                        "sep": float(cp.get("sep", 0.0)),
+                        "ent": float(cp.get("ent", 0.0)),
+                        "ano": bool(cp.get("ano", False)),
+                    }
+                )
+            except (TypeError, ValueError):
+                continue
+
+    viz_mode = "pipeline" if chunk_pos else "legacy"
+
+    # Map chunks to nearest rhombus center (rotate chunks to patch frame if needed).
+    cos_t, sin_t = math.cos(theta_opt), math.sin(theta_opt)
+    tile_chunks: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    if chunk_pos:
+        centers_nn: List[Tuple[int, float, float]] = []
+        for ri, r in enumerate(mint_rhombi):
+            cen = r.get("center")
+            if cen is not None:
+                centers_nn.append((ri, cen.real, cen.imag))
+        for cp in chunk_pos:
+            wx, wy = cp["wx"], cp["wy"]
+            rx = wx * cos_t - wy * sin_t
+            ry = wx * sin_t + wy * cos_t
+            best_ri = -1
+            best_d2 = float("inf")
+            for ri, cx, cy in centers_nn:
+                d2 = (rx - cx) ** 2 + (ry - cy) ** 2
+                if d2 < best_d2:
+                    best_d2 = d2
+                    best_ri = ri
+            if best_ri >= 0:
+                tile_chunks[best_ri].append(cp)
+
+    figure_count = (
+        sum(1 for ri in range(n_mint) if tile_chunks.get(ri))
+        if chunk_pos
+        else n_figure
+    )
+
+    def _tile_color(ri: int, rh: Dict[str, Any]) -> Tuple[str, str, float, float, float, float]:
+        """Return (base, stroke, stroke_op, stroke_w, bar_op, bar_w) from pipeline or legacy fallbacks."""
+        mapped = tile_chunks.get(ri, [])
+        thick = rh["type"] == "thick"
+
+        if not chunk_pos:
+            c = rh.get("center")
+            if c and math.hypot(c.real - apex_x, c.imag - apex_y) < fig_r:
                 base = "#f59e0b" if thick else "#fcd34d"
-                _emit_rh(r, base, "#7c2d12", 0.55, 0.75, 0.70, 0.55)
-            elif band_name == "fog":
-                base = "#2d5a8e" if thick else "#264d7a"
-                # No Ammann bars outside the gold core (avoids aliasing “black triangles” at small scale)
-                _emit_rh(r, base, "#1e293b", 0.32, 0.35, 0.00, 0.00)
-            else:
-                base = "#24364f" if thick else "#1f2f46"
-                _emit_rh(r, base, "#1e293b", 0.32, 0.35, 0.00, 0.00)
+                return base, "#7c2d12", 0.55, 0.75, 0.70, 0.55
+            base = "#24364f" if thick else "#1f2f46"
+            return base, "#1e293b", 0.32, 0.35, 0.0, 0.0
+
+        if not mapped:
+            base = "#1a2332" if thick else "#161e2d"
+            return base, "#1e293b", 0.20, 0.30, 0.0, 0.0
+
+        n_map = len(mapped)
+        avg_sep = sum(c["sep"] for c in mapped) / n_map
+        has_anomaly = any(c["ano"] for c in mapped)
+        density = min(
+            1.0,
+            (n_map / max(1, len(chunk_pos))) * len(mint_rhombi) * 0.5,
+        )
+
+        if has_anomaly:
+            base = "#ef4444" if thick else "#f87171"
+            # Show bars only on anomalies (keeps SVG light but highlights critical tiles).
+            return base, "#7f1d1d", 0.70, 0.85, 0.55, 0.45
+
+        t_sep = min(1.0, max(0.0, avg_sep))
+        if thick:
+            gold = (245, 158, 11)
+            teal = (20, 184, 166)
+        else:
+            gold = (252, 211, 77)
+            teal = (94, 234, 212)
+        rr = int(gold[0] * t_sep + teal[0] * (1.0 - t_sep))
+        gg = int(gold[1] * t_sep + teal[1] * (1.0 - t_sep))
+        bb = int(gold[2] * t_sep + teal[2] * (1.0 - t_sep))
+        base = f"#{rr:02x}{gg:02x}{bb:02x}"
+        # Keep Ammann bars off by default for performance; enable only in very dense regions.
+        bar_op = 0.35 * density if density > 0.75 else 0.0
+        return base, "#7c2d12", 0.42 + 0.18 * density, 0.60, bar_op, 0.40
+
+    for ri, r in enumerate(mint_rhombi):
+        b, st, so, sw, bo, bw = _tile_color(ri, r)
+        _emit_rh(r, b, st, so, sw, bo, bw)
 
     gm = build_genesis()["genesis_mints"]
     g_info = [
@@ -726,6 +812,27 @@ def generate_penrose_svg_viewport(
             f'{g["label"]}</text>'
         )
 
+    if chunk_pos:
+        ly = SVG_HEIGHT - 68
+        svg.append(
+            f'  <rect x="8" y="{ly}" width="130" height="28" rx="4" '
+            f'fill="#0f172a" fill-opacity="0.85" stroke="#334155" stroke-width="0.5"/>'
+        )
+        for i, (col, label) in enumerate(
+            [
+                ("#f59e0b", "high KAG"),
+                ("#14b8a6", "low KAG"),
+                ("#ef4444", "anom."),
+            ]
+        ):
+            x = 14 + i * 40
+            svg.append(
+                f'  <rect x="{x:.0f}" y="{ly + 6:.0f}" width="8" height="8" rx="1" fill="{col}"/>'
+            )
+            svg.append(
+                f'  <text x="{x + 11:.0f}" y="{ly + 14:.0f}" fill="#94a3b8" font-size="6">{label}</text>'
+            )
+
     deg = round(math.degrees(theta_opt)) % 360
     svg.extend(
         [
@@ -742,7 +849,7 @@ def generate_penrose_svg_viewport(
             [
                 f'  <text x="{SVG_CENTER_X}" y="16" text-anchor="middle" fill="#94a3b8" '
                 f'font-size="9">Field v6 · chain={chain_len} · tiles={n_mint} · '
-                f'figure={n_figure} · θ={deg}° · align={align_score} · {theme}</text>',
+                f'figure={figure_count} · θ={deg}° · align={align_score} · {theme} · {viz_mode}</text>',
                 f'  <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT-10}" text-anchor="middle" '
                 f'fill="#475569" font-size="8">τ=[{tau_str}...] · {penrose_hash}</text>',
             ]
