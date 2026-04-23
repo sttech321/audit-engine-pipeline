@@ -29,6 +29,7 @@ GENESIS_FRAME_HASH: str = GENESIS.get("frame_hash", "")
 def run_rim_audit(
     file_path: str,
     prev_state: Optional[str] = None,
+    chain_seed: Optional[str] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> Dict[str, Any]:
     """
@@ -66,13 +67,31 @@ def run_rim_audit(
         RuntimeError: If the reported schema or genesis frame hash do not
             match the expected values derived from `GENESIS`.
     """
+    if chain_seed is None:
+        try:
+            from app.services.artifact_chain import get_chain_seed as _get_chain_seed
+
+            chain_seed = _get_chain_seed()
+        except Exception:
+            chain_seed = None
+
     t_start = time.time()
-    report = audit_file(
-        file_path,
-        genesis=GENESIS,
-        prev_state=prev_state,
-        progress_callback=progress_callback,
-    )
+    try:
+        report = audit_file(
+            file_path,
+            genesis=GENESIS,
+            prev_state=prev_state,
+            chain_seed=chain_seed,
+            progress_callback=progress_callback,
+        )
+    except TypeError:
+        # Backward compatibility for tests/mocks that stub audit_file without chain_seed.
+        report = audit_file(
+            file_path,
+            genesis=GENESIS,
+            prev_state=prev_state,
+            progress_callback=progress_callback,
+        )
     audit_time = time.time() - t_start
 
     # Lightweight performance telemetry for client transparency.

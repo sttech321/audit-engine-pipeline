@@ -27,7 +27,7 @@ from app.services.file_validation import (
 )
 from eu_ai_act_layer import attach_to_report
 from app.services.rim_wrapper import run_rim_audit
-from app.services.artifact_chain import add_artifact_block
+from app.services.artifact_chain import add_artifact_block, get_chain_seed
 from app.services.worker_executor import execute_in_worker
 from app.utils.penrose import extract_penrose_from_report
 
@@ -288,14 +288,19 @@ class ChunkedUploadService:
             "error": session.error,
         }
         if session.status == "processing":
-            if upload_id not in self._processing_progress:
-                try:
-                    raw = Path(self._progress_path(upload_id)).read_text(encoding="ascii").strip()
-                    if raw:
-                        self._processing_progress[upload_id] = max(0.0, min(100.0, float(raw)))
-                except (OSError, ValueError):
-                    self._processing_progress[upload_id] = 0.0
-            out["processing_pct"] = self._processing_progress.get(upload_id, 0.0)
+            # Always re-read the progress file so polling sees live updates even if
+            # this request is served by a different worker/process than the background task.
+            try:
+                raw = Path(self._progress_path(upload_id)).read_text(encoding="ascii").strip()
+                if raw:
+                    self._processing_progress[upload_id] = max(0.0, min(100.0, float(raw)))
+            except (OSError, ValueError):
+                self._processing_progress.setdefault(upload_id, 0.0)
+
+            processing_pct = self._processing_progress.get(upload_id, 0.0)
+            out["processing_pct"] = processing_pct
+            # Backward compatibility: some clients display only progress_pct.
+            out["progress_pct"] = processing_pct
         if session.status == "completed" and session.result:
             out["result"] = session.result
         return out
@@ -373,6 +378,7 @@ class ChunkedUploadService:
                     run_rim_audit,
                     session.temp_path,
                     None,
+                    None,  # chain_seed (worker will default to current chain seed)
                     FileProgressCallback(progress_path),
                 )
             finally:
@@ -394,11 +400,13 @@ class ChunkedUploadService:
                 artifact_block = add_artifact_block(report, file_hash)
                 report["artifact_block"] = artifact_block
             except Exception as chain_error:
-                logger.warning(
+                # RIM-202: fail the request if we cannot append to the chain.
+                logger.error(
                     "Artifact chain append failed for %s: %s",
                     session.filename,
                     chain_error,
                 )
+                raise RuntimeError("CHAIN_APPEND_FAILED") from chain_error
 
             # Build response in same shape as single-file upload
             summary = report.get("summary", {}) or {}
@@ -460,7 +468,7 @@ class ChunkedUploadService:
                 f"Stage 5 - Risk: risk_level={risk_level}",
             ]
 
-            mock_kpis = [
+            kpis = [
                 KPI(id="kpi-1", label="Audit Score", value=audit_score, trend="stable", status=audit_status, description="RIM-OS integrity score"),
                 KPI(id="kpi-2", label="Issues Found", value=anomaly_count, trend="up" if anomaly_count > 0 else "down", status=issues_status, description="Anomalous chunks"),
                 KPI(id="kpi-3", label="KAG Score", value=f"{kag_score:.4f}", trend="up" if kag_score >= 0.5 else "down", status=kag_status, description="KAG separability"),
@@ -479,17 +487,19 @@ class ChunkedUploadService:
             integrity_block = report.get("integrity", {}) or {}
             risk_badge = RiskBadge.from_audit_score(audit_score, 0 if risk_level == "LOW" else 1 if risk_level == "MEDIUM" else 3)
             eu_ai_act = EUAIActCompliance.from_risk_badge(risk_badge)
+            chain_prev = artifact_block.get("prev_block_hash") if artifact_block else None
+            chain_next = artifact_block.get("block_hash") if artifact_block else None
             ledger_info = LedgerInfo(
                 ledger_id="RIM-OS-LEDGER",
                 sequence_number=0,
-                prev_state=ledger.get("prev_state"),
-                next_state_hash=ledger.get("next_state_hash"),
+                prev_state=chain_prev,
+                next_state_hash=chain_next,
                 audit_content_sha256=integrity_block.get("audit_content_sha256", file_hash),
                 entry_hash=ledger.get("events_hash", file_hash),
             )
             penrose_details = extract_penrose_from_report(report, fallback_hash=file_hash)
             extended = ExtendedAuditResult(
-                kpis=mock_kpis,
+                kpis=kpis,
                 verification=mock_verification,
                 file_hash=file_hash,
                 anomalies=[],
@@ -514,7 +524,7 @@ class ChunkedUploadService:
             response_data = {
                 "upload_id": upload_id,
                 "file_info": {"name": session.filename, "size": session.total_size, "type": "application/octet-stream"},
-                "kpis": [k.model_dump() for k in mock_kpis],
+                "kpis": [k.model_dump() for k in kpis],
                 "verification": mock_verification.model_dump(),
                 "file_hash": file_hash,
                 "artifact_block": artifact_block,

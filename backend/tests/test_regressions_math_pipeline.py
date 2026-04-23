@@ -2,19 +2,17 @@ from app.models.metadata_schemas import ArtifactFormat
 from app.services import rim_wrapper
 from app.services.metadata_parser import detect_format
 from app.utils.penrose import extract_penrose_from_report
-from rim_os_v2 import compute_k5, k5_to_world_position, _tau_pentagrid_from_k5
+from rim_os_v2 import compute_k5_and_tau, kag_invariants, k5_to_world_position
 
 
 def test_compute_k5_and_tau_pentagrid_are_deterministic_spectral():
-    chart = {
-        "row_means": [3.0, 5.0, 2.0, 8.0, 1.0, 0.0, 0.0, 0.0],
-        "gmean": 2.0,
-    }
-    k5 = compute_k5(chart, scale=50.0)
+    # Build a deterministic synthetic spectrum (shape matters, not scale).
+    spec256 = [(i * 17) % 1000 for i in range(256)]
+    inv = kag_invariants(spec256)
+    k5, tau = compute_k5_and_tau(inv, scale=50.0)
     assert len(k5) == 5
-    tau = _tau_pentagrid_from_k5(k5, scale=50.0)
     assert len(tau) == 5
-    assert all(0.0 <= t <= 1.0 for t in tau)
+    assert all(0.0 <= t < 1.0 for t in tau)
     x, y = k5_to_world_position(k5)
     assert isinstance(x, float) and isinstance(y, float)
 

@@ -411,7 +411,11 @@ def _build_mint_patch(
         if math.hypot(cx - wx, cy - wy) < viewport_r:
             cropped.append((col, A, B, C))
 
-    return cropped, 0.0, len(cropped)
+    # Deterministic orientation: vary with position on the global field.
+    # This is an "observer orientation" used by the viewport renderer (θ label + optional rotation),
+    # not a change to the underlying global field.
+    theta = math.atan2(wy, wx) if (abs(wx) > 1e-12 or abs(wy) > 1e-12) else 0.0
+    return cropped, float(theta), len(cropped)
 
 
 # Alias for callers / docs: mint pipeline returns triangles only, single pairing after merge.
@@ -615,11 +619,14 @@ def generate_penrose_svg_viewport(
         and math.hypot(r["center"].real - apex_x, r["center"].imag - apex_y) < fig_r
     )
 
+    # Use the mint patch's deterministic θ as a viewport rotation so different artifacts
+    # don't present with a constant 0° orientation.
+    deg = round(math.degrees(theta_opt)) % 360
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}" '
         f'width="{SVG_WIDTH}" height="{SVG_HEIGHT}" shape-rendering="geometricPrecision">',
         '  <rect width="100%" height="100%" fill="#0f172a"/>',
-        '  <g id="tiles">',
+        f'  <g id="tiles" transform="rotate({deg} {SVG_CENTER_X} {SVG_CENTER_Y})">',
     ]
 
     def _rgb(hex_color: str) -> Tuple[int, int, int]:
@@ -833,7 +840,6 @@ def generate_penrose_svg_viewport(
                 f'  <text x="{x + 11:.0f}" y="{ly + 14:.0f}" fill="#94a3b8" font-size="6">{label}</text>'
             )
 
-    deg = round(math.degrees(theta_opt)) % 360
     svg.extend(
         [
             "  </g>",

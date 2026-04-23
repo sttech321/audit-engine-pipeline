@@ -54,7 +54,7 @@ async def test_chunked_complete_uses_process_worker(monkeypatch):
 
     async def fake_execute_in_worker(func, *args, **kwargs):
         calls["worker"] += 1
-        progress_callback = args[2]
+        progress_callback = args[3]
         assert progress_callback is not None
         progress_callback(42.0)
         await asyncio.sleep(0.05)
@@ -75,6 +75,15 @@ async def test_chunked_complete_uses_process_worker(monkeypatch):
                 "events_hash": "e" * 64,
             },
             "integrity": {"audit_content_sha256": "i" * 64},
+            "map_position": {
+                "tau_vectors": [0.5, 0.5, 0.5, 0.5, 0.5],
+                "barycentric": [0.1, 0.2, 0.7],
+                "manifold_hash": "m" * 64,
+                "tile_hash": "t" * 64,
+                "k5": [0.0, 0.0, 0.0, 0.0, 0.0],
+                "world_x": 0.0,
+                "world_y": 0.0,
+            },
             "chunks": [
                 {
                     "tau_omega_norm": 0.2,

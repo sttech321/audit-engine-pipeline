@@ -111,9 +111,17 @@ async def chunked_upload_complete(upload_id: str):
 
     if status["status"] not in ("uploading", "merging"):
         if status["status"] == "processing":
+            # Include live progress for clients that don't poll /status.
+            live = await chunked_upload_service.get_status(upload_id) or {}
             return JSONResponse(
                 status_code=202,
-                content={"status": "processing", "upload_id": upload_id, "message": "RIM-OS audit in progress"},
+                content={
+                    "status": "processing",
+                    "upload_id": upload_id,
+                    "message": "RIM-OS audit in progress",
+                    "progress_pct": live.get("progress_pct", 0.0),
+                    "processing_pct": live.get("processing_pct", live.get("progress_pct", 0.0)),
+                },
             )
         if status["status"] == "failed":
             raise HTTPException(status_code=400, detail=status.get("error", "Processing failed"))
@@ -127,7 +135,14 @@ async def chunked_upload_complete(upload_id: str):
         )
 
     chunked_upload_service.start_background_complete(upload_id)
+    live = await chunked_upload_service.get_status(upload_id) or {}
     return JSONResponse(
         status_code=202,
-        content={"status": "processing", "upload_id": upload_id, "message": "RIM-OS audit started; poll /status for progress"},
+        content={
+            "status": "processing",
+            "upload_id": upload_id,
+            "message": "RIM-OS audit started; poll /status for progress",
+            "progress_pct": live.get("progress_pct", 0.0),
+            "processing_pct": live.get("processing_pct", live.get("progress_pct", 0.0)),
+        },
     )

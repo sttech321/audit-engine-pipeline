@@ -69,8 +69,65 @@ def test_batch_partial_failure(sample_valid_content):
     assert statuses["bad.txt"] == "failed"
 
 
-def test_batch_report_generation(sample_valid_content):
+def test_batch_report_generation(sample_valid_content, monkeypatch):
     """Reports (PDF/SVG) should be available for successful batch entries."""
+    # Speed: stub the expensive audit engine. Batch tests are verifying API wiring and
+    # report availability, not the full Gödel→p-adic→NTT→KAG runtime.
+    from app.services import rim_wrapper
+    from app.services import pdf_generator as pdf_generator_mod
+
+    def fake_run_rim_audit(file_path: str, prev_state=None, progress_callback=None):
+        return {
+            "schema": rim_wrapper.EXPECTED_SCHEMA,
+            "time_utc": "2026-01-01T00:00:00Z",
+            "input": {"path": "x", "size_bytes": 1, "chunk_count": 1, "chunk_size": 1},
+            "summary": {
+                "integrity_score_0_100": 95,
+                "risk_level": "LOW",
+                "avg_entropy_bits": 8.0,
+                "avg_penrose_match": 1.0,
+                "avg_kag_separability": 0.9,
+                "anomaly_count": 0,
+                "anomaly_fraction": 0.0,
+                "bias_penalty_0_1": 0.0,
+                "requires_human_review": False,
+                "conformity_passed": True,
+            },
+            "anomalies": [],
+            "chunks": [
+                {
+                    "chunk_index": 0,
+                    "world_x": 0.0,
+                    "world_y": 0.0,
+                    "separability": 0.9,
+                    "entropy_bits": 8.0,
+                    "ano": False,
+                }
+            ],
+            "ledger": {"events_hash": "e" * 64, "next_state_hash": "n" * 64},
+            "integrity": {"audit_content_sha256": "i" * 64},
+            "map_position": {
+                "k5": [0.0, 0.0, 0.0, 0.0, 0.0],
+                "tau_vectors": [0.5, 0.5, 0.5, 0.5, 0.5],
+                "world_x": 0.0,
+                "world_y": 0.0,
+                "barycentric": [0.33, 0.33, 0.34],
+                "manifold_hash": "m" * 64,
+                "tile_hash": "t" * 64,
+            },
+            "genesis_frame_hash": rim_wrapper.GENESIS_FRAME_HASH,
+            "EU_AI_ACT": {},
+        }
+
+    monkeypatch.setattr(rim_wrapper, "run_rim_audit", fake_run_rim_audit)
+
+    # Speed: stub PDF generation (ReportLab/FPDF work can dominate runtime on Windows CI).
+    class _FakePdfGen:
+        def generate_report(self, **kwargs):
+            return b"%PDF-1.4\n%RIMOS-TEST\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+
+    monkeypatch.setattr(pdf_generator_mod, "get_pdf_generator", lambda: _FakePdfGen())
+
     files = _make_batch_files(
         [
             ("model_batch.rim95", sample_valid_content),

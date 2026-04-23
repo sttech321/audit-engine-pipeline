@@ -33,6 +33,9 @@ class ErrorCode(str, Enum):
     # Pipeline errors
     PIPELINE_ERROR = "PIPELINE_ERROR"
     PIPELINE_STAGE_FAILED = "PIPELINE_STAGE_FAILED"
+
+    # Chain / ledger errors
+    CHAIN_APPEND_FAILED = "CHAIN_APPEND_FAILED"
     
     # Rate limiting errors
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"

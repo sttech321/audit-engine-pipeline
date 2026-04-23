@@ -116,9 +116,12 @@ def godel_encode_vector(data: bytes) -> Dict[str, Any]:
     """
     Vector-based Gödel encoding: position i → prime p_i, exponent = byte at position.
 
-    Splits data into 256-byte blocks. Per block: exps[i] = block[i] + 1 (preserves order).
-    Aggregates block vectors with position-weight so different byte orderings yield different
-    exponent vectors. True Gödel: each position maps to a prime; exponent = symbol at that position.
+    Ticket RIM-303 (Reference Model §4.2): this is a faithful translation, not a fingerprint.
+
+    Mechanisms (both are intentional):
+    - Within a 256-byte block: index i maps to prime p_i; exponent contribution is (byte + 1).
+    - Across blocks: each block k is weighted by w = k + 1 so the same bytes in different
+      block positions produce different exponent vectors (order sensitivity across blocks).
     """
     exps = [0] * 256
     n = len(data)
@@ -129,9 +132,11 @@ def godel_encode_vector(data: bytes) -> Dict[str, Any]:
     for k in range(num_blocks):
         start = k * 256
         end = min(start + 256, n)
+        # Reference Model §4.2: block-order sensitivity comes from w = k + 1.
         w = k + 1  # position weight: earlier blocks contribute less
         for i in range(end - start):
             byte_val = data[start + i]
+            # Reference Model §4.2: "position i carries exponent byte[i] on prime p_i".
             exps[i] += (byte_val + 1) * w
 
     log2 = sum(exps[i] * math.log2(PRIMES_256[i]) for i in range(256) if exps[i])
@@ -154,12 +159,29 @@ def godel_encode(hist: List[int]) -> Dict[str, Any]:
             "log2_size": float(log2)}
 
 def padic_lift(exps: List[int], k: int = 3) -> Dict[str, Any]:
-    """Gödel exponents → p-adic residues mod p_i^k."""
-    residues = [int(exps[i] % (PRIMES_256[i] ** max(1, min(k, 6))))
-                for i in range(256)]
-    return {"residues":   residues,
-            "padic_hash": canonical_hash(residues),
-            "k":          k}
+    """
+    Gödel exponents → p-adic residues mod \(p_i^k\).
+
+    Ticket RIM-304 (Reference Model §4.2): p-adic is a mounting lens, not intended to
+    destroy information. This implementation uses a fixed k (clamped to [1,6]) and reports
+    whether saturation occurs (exps[i] >= p_i^k) so callers/tests can detect information loss.
+    """
+    kk = max(1, min(int(k), 6))
+    mods = [int(PRIMES_256[i] ** kk) for i in range(256)]
+    residues = [int(exps[i] % mods[i]) for i in range(256)]
+
+    sat_count = 0
+    for i in range(256):
+        if int(exps[i]) >= mods[i]:
+            sat_count += 1
+    sat_frac = sat_count / 256.0
+
+    return {
+        "residues": residues,
+        "padic_hash": canonical_hash(residues),
+        "k": kk,
+        "saturation": {"count": sat_count, "fraction": float(sat_frac)},
+    }
 
 def _ntt_inplace(a: List[int], invert: bool) -> None:
     n = len(a); j = 0
@@ -185,26 +207,52 @@ def _ntt_inplace(a: List[int], invert: bool) -> None:
         for i in range(n): a[i] = a[i] * inv_n % NTT_MOD
 
 def ntt_fingerprint(residues: List[int], L: int = 1024) -> Dict[str, Any]:
-    """p-adic residues → exact NTT spectrum over GF(998244353)."""
-    sig = [0] * L
-    seed_bytes = sha256_hex(canonical_bytes(residues)).encode()
-    x = int.from_bytes(seed_bytes[:8], "little") | 1
-    for i, r in enumerate(residues):
-        x ^= (x << 13) & 0xFFFFFFFFFFFFFFFF
-        x ^= (x >> 7)  & 0xFFFFFFFFFFFFFFFF
-        x ^= (x << 17) & 0xFFFFFFFFFFFFFFFF
-        sig[(i * 1315423911 + (x & 0xFFFFFFFF)) % L] = \
-            (sig[(i * 1315423911 + (x & 0xFFFFFFFF)) % L] + r % NTT_MOD) % NTT_MOD
-    a = sig[:]
+    """
+    p-adic residues → NTT spectrum over GF(998244353).
+
+    Ticket RIM-302 (Reference Model §4.2): remove hash/PRNG scatter and transform the
+    residues directly. The natural input size here is already 256 (power of 2), so we compute
+    the exact 256-point NTT.
+
+    For backward compatibility with the current KAG implementation, we also derive a
+    deterministic 64-bin magnitude summary from the 256 spectrum by block averaging.
+    """
+    del L  # legacy parameter retained for API compatibility
+
+    # Normalize to exactly 256 coefficients (pad/crop deterministically).
+    n = 256
+    a = [0] * n
+    for i in range(min(n, len(residues))):
+        a[i] = int(residues[i]) % NTT_MOD
+
     _ntt_inplace(a, invert=False)
+
+    # Signed-magnitude fold for a stable non-negative "energy" view.
     half = NTT_MOD >> 1
-    mags = [v if v <= half else NTT_MOD - v for v in a]
-    block = L // 64
-    mag64 = [sum(mags[i*block:(i+1)*block]) // block for i in range(64)]
-    return {"spec_hash": canonical_hash(a), "mag64": mag64, "L": L}
+    mags256 = [v if v <= half else NTT_MOD - v for v in a]
+
+    # 256 → 64 by block averaging (explicit, deterministic).
+    block = n // 64  # 4
+    mag64 = [
+        sum(mags256[i * block : (i + 1) * block]) // block
+        for i in range(64)
+    ]
+
+    return {
+        "spec_hash": canonical_hash(a),
+        "spec256": a,
+        "mag64": mag64,
+        "L": n,
+    }
 
 def kag_grid(mag64: List[int]) -> Dict[str, Any]:
-    """8×8 KAG additive predictor on NTT magnitude vector."""
+    """
+    8×8 KAG additive predictor on NTT magnitude vector.
+
+    NOTE (RIM-401 pending): per Reference Model §5, KAG must be a distillation to
+    scale-invariant directional invariants, not an additive decomposition. This is a legacy
+    placeholder maintained for API compatibility until the redesign lands.
+    """
     G = 8; grid = [[mag64[y*G+x] for x in range(G)] for y in range(G)]
     g_mean = sum(mag64) / 64
     row_mean = [sum(grid[y]) / G for y in range(G)]
@@ -219,12 +267,89 @@ def kag_grid(mag64: List[int]) -> Dict[str, Any]:
     return {"kag_hash": canonical_hash(kag_obj), "separability": sep,
             "chart": kag_obj}
 
+def kag_invariants(spec256: List[int]) -> Dict[str, Any]:
+    """
+    Ticket RIM-401: distill NTT spectrum to scale-invariant invariants.
+
+    See docs/design/kag_invariants.md.
+    """
+    eps = 1e-12
+    # Fold to non-negative magnitudes.
+    half = NTT_MOD >> 1
+    mags = [float(v if v <= half else NTT_MOD - v) for v in spec256[:256]]
+    if len(mags) < 256:
+        mags += [0.0] * (256 - len(mags))
+
+    tot = sum(m + eps for m in mags)
+    ps = [(m + eps) / tot for m in mags]
+
+    # 5-way directional mass buckets by index mod 5.
+    dir_mass = [0.0] * 5
+    for i, p in enumerate(ps):
+        dir_mass[i % 5] += p
+
+    # Directional entropy (0..1)
+    dir_entropy = 0.0
+    for d in dir_mass:
+        if d > 0:
+            dir_entropy -= d * math.log(d)
+    dir_entropy = float(dir_entropy / math.log(5))
+
+    # Participation ratio normalized to [0,1]
+    sumsq = sum(p * p for p in ps)
+    participation = float((1.0 / max(eps, sumsq)) / 256.0)
+
+    # Index distribution moments (normalized)
+    mu = sum(i * ps[i] for i in range(256))
+    var = sum(((i - mu) ** 2) * ps[i] for i in range(256))
+    sigma = math.sqrt(max(eps, var))
+    skew = sum((((i - mu) / sigma) ** 3) * ps[i] for i in range(256))
+
+    inv = {
+        "dir_mass": [float(x) for x in dir_mass],
+        "dir_entropy": float(dir_entropy),
+        "participation": float(participation),
+        "index_mu": float(mu / 255.0),
+        "index_var": float(var / (255.0 * 255.0)),
+        "index_skew": float(max(-10.0, min(10.0, skew))),
+    }
+    return {"invariants": inv, "kag_hash": canonical_hash(inv)}
+
+
+def compute_k5_and_tau(kag_inv: Dict[str, Any], scale: float = 50.0) -> Tuple[List[float], List[float]]:
+    """
+    Ticket RIM-402/403: compute k5 (parallel) and τ (perpendicular) independently.
+
+    See docs/design/cascade.md.
+    """
+    inv = kag_inv.get("invariants") or {}
+    dir_mass = list(inv.get("dir_mass") or [0.2] * 5)
+    while len(dir_mass) < 5:
+        dir_mass.append(0.2)
+    dir_mass = dir_mass[:5]
+
+    # k5 from deviation from uniform.
+    k5 = [float(scale * (dir_mass[i] - 0.2)) for i in range(5)]
+
+    # τ from independent scalar invariants + fixed offsets (mod 1, no clamp).
+    alphas = [((PHI * (i + 1)) % 1.0) for i in range(5)]
+    u = [
+        float(inv.get("index_mu", 0.5)),
+        float(inv.get("index_var", 0.2)),
+        float(inv.get("index_skew", 0.0)),
+        float(inv.get("dir_entropy", 0.5)),
+        float(inv.get("participation", 0.5)),
+    ]
+    tau = [float((u[i] + alphas[i]) % 1.0) for i in range(5)]
+
+    return k5, tau
 def compute_k5(kag_chart: Dict[str, Any], scale: float = 50.0) -> List[float]:
     """
     KAG chart → k ∈ ℝ⁵ world coordinates on the Penrose field.
 
-    Uses the first five row means relative to gmean as coordinate components.
-    No normalization to [0,1); magnitude is preserved up to scale.
+    NOTE (RIM-402 pending): per Reference Model §6.3, k5 (lattice position) and τ (phase)
+    must be computed as independent parallel/perpendicular components from KAG invariants.
+    The current implementation derives k5 from the KAG 8×8 chart as a temporary placeholder.
     """
     row_means = kag_chart["row_means"]
     gmean = float(kag_chart["gmean"])
@@ -249,6 +374,10 @@ def _tau_pentagrid_from_k5(k5: List[float], scale: float = 50.0) -> List[float]:
     """
     Map k5 world coordinates to [0,1]⁵ pentagrid offsets for penrose_patch /
     barycentric (backward compatible with legacy tau_pentagrid).
+
+    NOTE (RIM-402/RIM-403 pending): the Reference Model requires τ to carry the
+    perpendicular (phase) component of cut-and-project and NOT be derived from k5.
+    Additionally, clamping destroys injectivity; τ should be reduced mod 1 without clamp.
     """
     kk = (list(k5) + [0.0] * 5)[:5]
     if max(abs(v) for v in kk) < 1e-15:
@@ -481,13 +610,13 @@ def process_chunk(chunk: bytes) -> Dict[str, Any]:
     hi_ent = shannon_entropy(hi_hist, len(hi))
     lo_ent = shannon_entropy(byte_histogram(lo), len(lo))
 
-    g   = godel_encode_vector(hi)
+    # RIM-301: full chunk enters the microscope (hi/lo may remain as side statistics only).
+    g   = godel_encode_vector(chunk)
     p   = padic_lift(g["exponents"], k=3)
     ntt = ntt_fingerprint(p["residues"], L=1024)
-    kag = kag_grid(ntt["mag64"])
-    k5 = compute_k5(kag["chart"], scale=50.0)
+    kag = kag_invariants(ntt["spec256"])
+    k5, tau5 = compute_k5_and_tau(kag, scale=50.0)
     wx, wy = k5_to_world_position(k5)
-    tau5 = _tau_pentagrid_from_k5(k5, scale=50.0)
     til = penrose_patch(tau5, N=6, max_tiles=384)
     ms  = penrose_match_score(til)
 
@@ -504,7 +633,8 @@ def process_chunk(chunk: bytes) -> Dict[str, Any]:
         "stats":         stats,
         "hi_entropy":    hi_ent,
         "lo_entropy":    lo_ent,
-        "separability":  kag["separability"],
+        # Keep the field name stable; interpret as (1 - directional entropy) for now.
+        "separability":  float(clamp01(1.0 - (kag["invariants"].get("dir_entropy", 0.5)))),
         "match_score":   ms,
         "tile_hash":     til["tile_hash"],
         "manifold_hash": manifold_hash,
@@ -926,8 +1056,6 @@ def build_ledger(chunks: List[Dict],
     """
     events_hash = sha256_hex(
         "".join(c.get("manifold_hash","") for c in chunks).encode())
-    mh_agg = sha256_hex(
-        "".join(c.get("manifold_hash","") for c in chunks).encode())
     th_agg = sha256_hex(
         "".join(c.get("tile_hash","") for c in chunks).encode())
 
@@ -939,7 +1067,8 @@ def build_ledger(chunks: List[Dict],
     if chunks:
         first = chunks[0]
         map_position = {
-            "artifact_hash": first.get("manifold_hash", ""),
+            # RIM-102: this is NOT the file's SHA-256; it is the first chunk's manifold hash.
+            "first_chunk_manifold_hash": first.get("manifold_hash", ""),
             "tile_hash": first.get("tile_hash", ""),
             "tau": first.get("tau_pentagrid", []),
             "prev_state": prev_state,
@@ -947,7 +1076,6 @@ def build_ledger(chunks: List[Dict],
 
     return {
         "events_hash":    events_hash,
-        "mh_aggregate":   mh_agg,
         "th_aggregate":   th_agg,
         "prev_state":     prev_state,
         "next_state_hash": next_state,
@@ -999,6 +1127,7 @@ def audit_file(path: str,
                genesis: Optional[Dict] = None,
                max_chunks: Optional[int] = None,
                prev_state: Optional[str] = None,
+               chain_seed: Optional[str] = None,
                progress_callback: Optional[Callable[[float], None]] = None) -> Dict[str, Any]:
     """
     Stream-audit any binary file (safetensors, GGUF, raw weights, ...).
@@ -1092,9 +1221,9 @@ def audit_file(path: str,
 
     ledger = build_ledger(chunks, prev_state)
 
-    # Global artifact map position derived from all chunks.
-    # Sort by chunk_index so the seed is independent of processing order.
+    # RIM-404: file-level position must be order-sensitive (trajectory aggregation), not mean.
     k5_avg: List[float] = [0.0] * 5
+    tau_vectors: List[float] = []
     wx_map = 0.0
     wy_map = 0.0
     if chunks:
@@ -1105,24 +1234,57 @@ def audit_file(path: str,
                 seed.update(kh.encode("ascii"))
         combined_seed = seed.hexdigest()
         sorted_chunks = sorted(chunks, key=lambda x: x["chunk_index"])
-        nch = len(sorted_chunks)
-        k5_agg = [0.0] * 5
-        for c in sorted_chunks:
+        # Trajectory state (simple deterministic mixing; see docs/design/trajectory.md).
+        S = [0.0] * 5
+        T = [0.5] * 5
+        for idx, c in enumerate(sorted_chunks):
             ck = c.get("k5") or [0.0] * 5
-            for i in range(5):
-                k5_agg[i] += float(ck[i] if i < len(ck) else 0.0)
-        k5_avg = [k5_agg[i] / nch for i in range(5)]
-        wx_map = sum(float(c.get("world_x", 0.0)) for c in sorted_chunks) / nch
-        wy_map = sum(float(c.get("world_y", 0.0)) for c in sorted_chunks) / nch
-        tau_vectors = _tau_pentagrid_from_k5(k5_avg, scale=50.0)
+            ct = c.get("tau_pentagrid") or [0.5] * 5
+            ck5 = [float(ck[i] if i < len(ck) else 0.0) for i in range(5)]
+            ct5 = [float(ct[i] if i < len(ct) else 0.5) for i in range(5)]
+
+            # Index-dependent rotation (5-cycle) and weighting.
+            two_pi = 2.0 * math.pi
+            theta = ((idx + 1) * two_pi / PHI) % two_pi
+            cth, sth = math.cos(theta), math.sin(theta)
+            S_rot = [
+                S[i] * cth + S[(i - 1) % 5] * sth
+                for i in range(5)
+            ]
+            beta = 1.0 + min(4.0, idx / 16.0)
+            S = [S_rot[i] + beta * ck5[i] for i in range(5)]
+
+            gamma = 0.35
+            deltas = [((PHI * (i + 1) * (idx + 1)) % 1.0) for i in range(5)]
+            T = [float((T[i] + gamma * ct5[i] + deltas[i]) % 1.0) for i in range(5)]
+
+        # Normalize S into a bounded k5 scale similar to prior convention.
+        max_abs = max(1e-12, max(abs(v) for v in S))
+        k5_avg = [float(v * 50.0 / max_abs) for v in S]
+        tau_vectors = [float(x % 1.0) for x in T]
+
+        wx_map, wy_map = k5_to_world_position(k5_avg)
         bary = _barycentric(tau_vectors, gm)
         manifold_hash = combined_seed
         tile_hash = canonical_hash({"tau": tau_vectors, "k5": k5_avg})
     else:
-        tau_vectors = []
         bary = []
         manifold_hash = ""
         tile_hash = ""
+
+    # RIM-501: amplitude-bounded convergence (seed-aware position).
+    # Internal structure (tau_vectors, barycentric) must remain invariant; we only apply
+    # a small bounded drift to k5/world position derived from chain_seed.
+    if chain_seed and chunks:
+        import hashlib as _hashlib
+        h = _hashlib.sha256(f"{chain_seed}|{manifold_hash}".encode("utf-8")).digest()
+        # 5D drift direction in [-1,1]
+        v = [((h[i] / 255.0) * 2.0 - 1.0) for i in range(5)]
+        norm = math.sqrt(sum(x * x for x in v)) or 1.0
+        v = [x / norm for x in v]
+        eps_pos = 0.20  # default ε_position (empirical; see Reference §8.4)
+        k5_avg = [k5_avg[i] + v[i] * eps_pos for i in range(5)]
+        wx_map, wy_map = k5_to_world_position(k5_avg)
 
     map_position = {
         "tau_vectors": tau_vectors,

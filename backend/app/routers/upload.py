@@ -239,7 +239,10 @@ async def upload_audit_file(
             tmp_path = tmp.name
 
         try:
-            report = run_rim_audit(tmp_path)
+            # RIM-501: seed-aware audit run (chain seed provides convergence context).
+            from app.services.artifact_chain import get_chain_seed
+
+            report = run_rim_audit(tmp_path, chain_seed=get_chain_seed())
         finally:
             try:
                 os.unlink(tmp_path)
@@ -286,7 +289,7 @@ async def upload_audit_file(
             "excellent" if anomaly_fraction == 0.0 else "good" if anomaly_fraction <= 0.05 else "warning"
         )
 
-        mock_kpis = [
+        kpis = [
             KPI(
                 id="kpi-1",
                 label="Audit Score",
@@ -361,7 +364,18 @@ async def upload_audit_file(
             artifact_block = add_artifact_block(report, file_hash)
             report["artifact_block"] = artifact_block
         except Exception as chain_error:
-            logger.warning(f"Artifact chain append failed for {file.filename}: {chain_error}")
+            # RIM-202: a successful audit that is not committed to the chain is not successful.
+            logger.error(f"Artifact chain append failed for {file.filename}: {chain_error}")
+            if settings.use_structured_errors:
+                raise_structured_error(
+                    StructuredError(
+                        code=ErrorCode.CHAIN_APPEND_FAILED,
+                        message="Artifact chain append failed",
+                        details={"reason": str(chain_error)},
+                    ),
+                    status_code=500,
+                )
+            raise HTTPException(status_code=500, detail="Artifact chain append failed")
 
         # Build a minimal ExtendedAuditResult for report caching.
         failed_checks = 0 if risk_level == "LOW" else 1 if risk_level == "MEDIUM" else 3
@@ -371,11 +385,14 @@ async def upload_audit_file(
 
         ledger = report.get("ledger") or {}
         integrity_block = report.get("integrity", {}) or {}
+        # RIM-205: treat artifact_chain linkage as the chain, not pipeline prev/next.
+        chain_prev = artifact_block.get("prev_block_hash") if artifact_block else None
+        chain_next = artifact_block.get("block_hash") if artifact_block else None
         ledger_info = LedgerInfo(
             ledger_id="RIM-OS-LEDGER",
             sequence_number=0,
-            prev_state=ledger.get("prev_state"),
-            next_state_hash=ledger.get("next_state_hash"),
+            prev_state=chain_prev,
+            next_state_hash=chain_next,
             audit_content_sha256=integrity_block.get("audit_content_sha256", file_hash),
             entry_hash=ledger.get("events_hash", file_hash),
         )
@@ -386,7 +403,7 @@ async def upload_audit_file(
         penrose_details = extract_penrose_from_report(report, fallback_hash=file_hash)
 
         extended = ExtendedAuditResult(
-            kpis=mock_kpis,
+            kpis=kpis,
             verification=mock_verification,
             file_hash=file_hash,
             anomalies=[],
@@ -415,7 +432,7 @@ async def upload_audit_file(
         cache_audit_result(upload_id, extended)
 
         # Extract the dynamic score and status to inject into the NFT metadata
-        dynamic_score = next((kpi.value for kpi in mock_kpis if kpi.label == "Audit Score"), 0)
+        dynamic_score = next((kpi.value for kpi in kpis if kpi.label == "Audit Score"), 0)
         dynamic_status = mock_verification.status
 
         logger.info(f"Processed {file.filename}: score={dynamic_score}, status={dynamic_status}")
@@ -468,7 +485,7 @@ async def upload_audit_file(
 
         return UploadResponse(
             fileInfo=FileInfo(name=file.filename, size=file_size, type=file.content_type or "application/octet-stream"),
-            kpis=mock_kpis,
+            kpis=kpis,
             verification=mock_verification,
             fileHash=file_hash,
             uploadId=upload_id,

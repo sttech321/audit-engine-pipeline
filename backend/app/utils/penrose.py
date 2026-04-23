@@ -40,7 +40,9 @@ def extract_penrose_from_report(report: Dict[str, Any], fallback_hash: str = "")
 
     ledger = report.get("ledger", {}) or {}
     integrity = report.get("integrity", {}) or {}
-    next_state = ledger.get("next_state_hash") or fallback_hash
+    # RIM-205: pipeline-level next_state_hash is being phased out; prefer artifact_chain linkage.
+    artifact_block = report.get("artifact_block", {}) or {}
+    next_state = artifact_block.get("block_hash") or ledger.get("next_state_hash") or fallback_hash
     manifold_hash = (first_chunk.get("manifold_hash")
                      or integrity.get("audit_content_sha256", ""))
 
