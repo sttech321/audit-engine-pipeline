@@ -366,8 +366,8 @@ def _art12_logging_block(rim_report: Dict) -> Dict:
     """
     Art. 12 — Record-Keeping / Logging.
 
-    Every audit run produces a cryptographically linked ledger entry
-    that enables chain-of-custody verification.
+    Every audit run produces cryptographic event metadata; chain-of-custody
+    linkage is appended by the artifact-chain storage layer.
     """
     ledger = _extract_ledger(rim_report)
     inp    = rim_report.get("input", {})
@@ -384,14 +384,12 @@ def _art12_logging_block(rim_report: Dict) -> Dict:
         },
         "ledger": {
             "events_hash":      ledger.get("events_hash", ""),
-            "next_state_hash":  ledger.get("next_state_hash", ""),
-            "prev_state_hash":  ledger.get("prev_state_hash", None),
-            "chain_linkable":   True,
+            "chain_linkable":   False,
             "blockchain_ready": True,
         },
         "traceability_notes": [
-            "events_hash covers all per-chunk manifold hashes; any weight change breaks the chain.",
-            "next_state_hash is suitable for on-chain storage (Ethereum, Solana, etc.).",
+            "events_hash covers all per-chunk manifold hashes; any weight change changes the event digest.",
+            "Artifact block_hash / prev_block_hash values are recorded by artifact_chain.",
             "Full chunk-level audit trail is embedded in the parent rim_os_v2 report.",
         ],
     }

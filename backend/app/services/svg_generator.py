@@ -166,13 +166,16 @@ def _path_from_complex_verts(verts: List[complex], cx: float, cy: float, scale: 
 
 def generate_penrose_svg(
     penrose_data: Dict[str, Any],
+    chain_seed: str,
     risk_level: str = "LOW",
     show_labels: bool = True,
     show_hash: bool = True
 ) -> str:
     """
     Generate dense Penrose P3 tiling via inflation.
-    Deterministic from penrose_hash + tile_hash.
+
+    Reference Model §9 treats the SVG render as the commit, so the render seed
+    is SHA-256(chain_seed + ':' + penrose_hash + ':' + tile_hash).
     """
     theta = penrose_data.get("theta", 0)
     sector = penrose_data.get("sector", 0)
@@ -180,7 +183,9 @@ def generate_penrose_svg(
     tau = penrose_data.get("tau", 0.5)
     tile_hash = penrose_data.get("tile_hash", "")[:16]
 
-    seed = penrose_hash + tile_hash
+    seed = hashlib.sha256(
+        f"{chain_seed}:{penrose_hash}:{tile_hash}".encode("utf-8")
+    ).hexdigest()
     risk_color = RISK_COLORS.get(risk_level, RISK_COLORS["LOW"])
 
     rhombi = _inflate_penrose(seed, iterations=5)
@@ -460,6 +465,7 @@ def _ammann_segments_complex(t: Dict[str, Any]) -> List[Tuple[Tuple[float, float
 def generate_penrose_svg_viewport(
     penrose_data: Dict[str, Any],
     chain: List[Dict[str, Any]],
+    chain_seed: str,
     risk_level: str = "LOW",
     viewport_radius: float = DEFAULT_VIEWPORT_RADIUS,
     show_labels: bool = True,
@@ -475,6 +481,11 @@ def generate_penrose_svg_viewport(
 
     risk_color = RISK_COLORS.get(risk_level, RISK_COLORS["LOW"])
     penrose_hash = str(penrose_data.get("penrose_hash", ""))[:16]
+    tile_hash = str(penrose_data.get("tile_hash", ""))[:16]
+    render_seed = hashlib.sha256(
+        f"{chain_seed}:{penrose_hash}:{tile_hash}".encode("utf-8")
+    ).hexdigest()
+    render_phase = int(render_seed[:8], 16) / 0xFFFFFFFF
     chain_len = len(chain or [])
 
     tau_raw = penrose_data.get("tau_vectors", penrose_data.get("tau", [0.5]))
@@ -528,6 +539,7 @@ def generate_penrose_svg_viewport(
     if not mint_rhombi:
         return generate_penrose_svg(
             penrose_data=penrose_data,
+            chain_seed=chain_seed,
             risk_level=risk_level,
             show_labels=show_labels,
             show_hash=True,
@@ -580,6 +592,7 @@ def generate_penrose_svg_viewport(
     if not xs:
         return generate_penrose_svg(
             penrose_data=penrose_data,
+            chain_seed=chain_seed,
             risk_level=risk_level,
             show_labels=show_labels,
             show_hash=True,
@@ -621,7 +634,7 @@ def generate_penrose_svg_viewport(
 
     # Use the mint patch's deterministic θ as a viewport rotation so different artifacts
     # don't present with a constant 0° orientation.
-    deg = round(math.degrees(theta_opt)) % 360
+    deg = (round(math.degrees(theta_opt)) + int(render_seed[:2], 16)) % 360
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}" '
         f'width="{SVG_WIDTH}" height="{SVG_HEIGHT}" shape-rendering="geometricPrecision">',
@@ -650,7 +663,7 @@ def generate_penrose_svg_viewport(
         k = (math.cos(ang - math.radians(35)) + 1.0) * 0.5
         al = 0.07 + 0.06 * k
         cen = rh.get("center") or sum(verts) / 4
-        al += 0.03 * math.sin(cen.real * 1.618 + cen.imag * 1.414)
+        al += 0.03 * math.sin(cen.real * 1.618 + cen.imag * 1.414 + render_phase * TWO_PI)
         al = min(0.18, max(0.03, al))
         return _mix(base, "#ffffff", al)
 
@@ -857,7 +870,7 @@ def generate_penrose_svg_viewport(
                 f'font-size="9">Field v6 · chain={chain_len} · tiles={n_mint} · '
                 f'figure={figure_count} · θ={deg}° · align={align_score} · {theme} · {viz_mode}</text>',
                 f'  <text x="{SVG_CENTER_X}" y="{SVG_HEIGHT-10}" text-anchor="middle" '
-                f'fill="#475569" font-size="8">τ=[{tau_str}...] · {penrose_hash}</text>',
+                f'fill="#475569" font-size="8">τ=[{tau_str}...] · {penrose_hash} · seed={render_seed[:8]}</text>',
             ]
         )
     svg.append("</svg>")

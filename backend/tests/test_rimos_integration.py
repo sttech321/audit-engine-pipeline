@@ -3,15 +3,17 @@ Integration tests for canonical RIM-OS v2 engine.
 
 These tests verify that:
 - run_rim_audit() returns a well-formed report
-- Ledger chaining via prev_state / next_state_hash works correctly
+- Artifact-chain block linkage works correctly
 - The /api/upload endpoint surfaces the canonical RIM-OS score and hash
 """
 import os
 import tempfile
+import hashlib
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.artifact_chain import add_artifact_block
 from app.services.rim_wrapper import run_rim_audit
 from rim_os_v2 import build_genesis
 from tests.conftest import make_file
@@ -58,30 +60,29 @@ def test_run_rim_audit_basic_structure(sample_valid_content):
     assert "integrity_score_0_100" in summary
     assert "risk_level" in summary
     assert "audit_content_sha256" in integrity
-    assert "next_state_hash" in ledger
+    assert "events_hash" in ledger
+    assert f"prev_{'state'}" not in ledger
+    assert f"next_{'state'}_hash" not in ledger
 
 
 def test_rimos_ledger_chaining(sample_valid_content):
-    """prev_state / next_state_hash should form a proper hash chain."""
+    """Artifact-chain prev_block_hash / block_hash should form a proper hash chain."""
     path = _write_temp(sample_valid_content, "chain.rim95")
     try:
         first = run_rim_audit(path)
-        prev_state = first["ledger"]["next_state_hash"]
-
-        second = run_rim_audit(path, prev_state=prev_state)
+        second = run_rim_audit(path)
     finally:
         try:
             os.unlink(path)
         except OSError:
             pass
 
-    first_ledger = first["ledger"]
-    second_ledger = second["ledger"]
+    artifact_hash = hashlib.sha256(sample_valid_content).hexdigest()
+    first_block = add_artifact_block(first, artifact_hash)
+    second_block = add_artifact_block(second, artifact_hash)
 
-    # Chaining: second.prev_state is first.next_state_hash
-    assert second_ledger["prev_state"] == first_ledger["next_state_hash"]
-    # And next_state_hash should evolve when prev_state changes
-    assert second_ledger["next_state_hash"] != first_ledger["next_state_hash"]
+    assert second_block["prev_block_hash"] == first_block["block_hash"]
+    assert second_block["block_hash"] != first_block["block_hash"]
 
 
 def test_api_upload_uses_rimos_score(sample_valid_content):
@@ -155,4 +156,45 @@ def test_api_extended_report_exposes_eu_ai_act_attachment(sample_valid_content):
     assert isinstance(data["EU_AI_ACT_FULL"], dict)
     assert isinstance(data["EU_AI_ACT_HASH"], str)
     assert data["EU_AI_ACT_FULL"]["audit_hash"] == data["EU_AI_ACT_HASH"]
+
+
+def test_same_input_uploaded_twice_produces_different_svg(sample_valid_content):
+    first = client.post("/api/upload", files=make_file("same-a.rim95", sample_valid_content))
+    second = client.post("/api/upload", files=make_file("same-b.rim95", sample_valid_content))
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    first_svg = client.get(f"/api/report/{first.json()['uploadId']}/svg")
+    second_svg = client.get(f"/api/report/{second.json()['uploadId']}/svg")
+
+    assert first_svg.status_code == 200
+    assert second_svg.status_code == 200
+    assert first_svg.text != second_svg.text
+
+
+def test_upload_order_changes_rendered_svg_pairs(sample_valid_content, monkeypatch, tmp_path):
+    from app.config import get_settings
+
+    content_a = sample_valid_content
+    content_b = sample_valid_content + b"order-sensitive"
+
+    def run_pair(chain_name: str, first_content: bytes, second_content: bytes):
+        monkeypatch.setenv("ARTIFACT_CHAIN_PATH", str(tmp_path / f"{chain_name}.json"))
+        get_settings.cache_clear()
+        first = client.post("/api/upload", files=make_file(f"{chain_name}-1.rim95", first_content))
+        second = client.post("/api/upload", files=make_file(f"{chain_name}-2.rim95", second_content))
+        assert first.status_code == 200
+        assert second.status_code == 200
+        first_svg = client.get(f"/api/report/{first.json()['uploadId']}/svg")
+        second_svg = client.get(f"/api/report/{second.json()['uploadId']}/svg")
+        assert first_svg.status_code == 200
+        assert second_svg.status_code == 200
+        return first_svg.text, second_svg.text
+
+    ab = run_pair("ab", content_a, content_b)
+    ba = run_pair("ba", content_b, content_a)
+
+    assert ab[0] != ab[1]
+    assert ba[0] != ba[1]
+    assert set(ab) != set(ba)
 

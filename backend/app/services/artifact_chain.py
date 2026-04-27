@@ -4,6 +4,9 @@ Local artifact-position blockchain storage.
 This layer is additive: it consumes already-computed map coordinates from the
 RIM-OS report and appends them to a local JSON chain without changing the
 underlying mathematical pipeline.
+
+Chain linkage is the responsibility of this module. build_ledger and rim_wrapper
+must not produce or carry chain-state fields.
 """
 from __future__ import annotations
 
@@ -19,7 +22,7 @@ from app.config import get_settings
 
 _CHAIN_LOCK = threading.Lock()
 _GENESIS_TIMESTAMP = "2026-01-01T00:00:00Z"
-_PIPELINE_VERSION = "v3.0.0"
+_PIPELINE_VERSION = "v3.1.0"
 _GENESIS_ANCHORS = [
     "fine_structure_constant",
     "einstein_field_equations",
@@ -140,6 +143,12 @@ def _load_chain_unlocked() -> List[Dict[str, Any]]:
         chain = []
 
     if not chain:
+        chain = [_genesis_block()]
+        _atomic_write_text(path, json.dumps(chain, indent=2))
+        _persist_chain_seed_unlocked(chain)
+        return chain
+
+    if any(block.get("pipeline_version") != _PIPELINE_VERSION for block in chain):
         chain = [_genesis_block()]
         _atomic_write_text(path, json.dumps(chain, indent=2))
         _persist_chain_seed_unlocked(chain)

@@ -23,7 +23,7 @@ from app.models.common_schemas import (
     ExtendedAuditResult
 )
 from app.services.pdf_generator import get_pdf_generator, generate_pdf_html, PDF_AVAILABLE
-from app.services.artifact_chain import get_artifact_chain
+from app.services.artifact_chain import get_artifact_chain, get_chain_seed
 from app.services.svg_generator import (
     generate_penrose_svg,
     generate_penrose_svg_viewport,
@@ -118,11 +118,17 @@ def _generate_chain_view_svg(cached: ExtendedAuditResult) -> Optional[str]:
         penrose_data["tau_vectors"] = list(cached.map_position.tau_vectors or [])
 
     chain = get_artifact_chain()
+    chain_seed = None
+    if cached.artifact_block:
+        chain_seed = cached.artifact_block.chain_seed_at_commit
+    if not chain_seed:
+        chain_seed = get_chain_seed()
 
     try:
         return generate_penrose_svg_viewport(
             penrose_data=penrose_data,
             chain=chain,
+            chain_seed=chain_seed,
             risk_level=cached.risk_badge.level.value,
             viewport_radius=0.38,
         )
@@ -133,6 +139,7 @@ def _generate_chain_view_svg(cached: ExtendedAuditResult) -> Optional[str]:
         )
         return generate_penrose_svg(
             penrose_data,
+            chain_seed=chain_seed,
             risk_level=cached.risk_badge.level.value,
         )
 

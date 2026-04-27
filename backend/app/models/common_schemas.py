@@ -166,8 +166,8 @@ class LedgerInfo(BaseModel):
     """Ledger chain information for an audit entry."""
     ledger_id: str
     sequence_number: int
-    prev_state: Optional[str] = None
-    next_state_hash: Optional[str] = None
+    prev_block_hash: Optional[str] = None
+    block_hash: Optional[str] = None
     audit_content_sha256: str
     entry_hash: str
 
@@ -185,6 +185,8 @@ class ArtifactBlock(BaseModel):
     index: int
     timestamp: str
     artifact_hash: str
+    pipeline_version: Optional[str] = None
+    chain_seed_at_commit: Optional[str] = None
     tau_vectors: List[float]
     manifold_hash: str
     tile_hash: str

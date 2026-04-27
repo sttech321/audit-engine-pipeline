@@ -3,7 +3,6 @@
 import React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import {
   Shield,
   Upload,
@@ -167,7 +166,7 @@ function GenesisMint({
   const c = colorMap[color];
   return (
     <div
-      className={`relative rounded-[2rem] p-8 ${c.glass} ${c.glow} overflow-hidden`}
+      className={`relative rounded-4xl p-8 ${c.glass} ${c.glow} overflow-hidden`}
     >
       <div className="absolute top-4 right-4">
         <span
@@ -483,7 +482,7 @@ export default function Home() {
 
         {/* ── Formats & CTA banner ── */}
         <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-6 rounded-[2rem] border border-amber-300/20 bg-amber-300/6 p-8 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-6 rounded-4xl border border-amber-300/20 bg-amber-300/6 p-8 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.28em] text-amber-200/70 mb-2">
                 Native Formats

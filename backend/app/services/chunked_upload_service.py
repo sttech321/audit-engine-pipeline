@@ -374,11 +374,11 @@ class ChunkedUploadService:
             progress_task = asyncio.create_task(_monitor_progress())
 
             try:
+                chain_seed = get_chain_seed()
                 report = await execute_in_worker(
                     run_rim_audit,
                     session.temp_path,
-                    None,
-                    None,  # chain_seed (worker will default to current chain seed)
+                    chain_seed,
                     FileProgressCallback(progress_path),
                 )
             finally:
@@ -492,8 +492,8 @@ class ChunkedUploadService:
             ledger_info = LedgerInfo(
                 ledger_id="RIM-OS-LEDGER",
                 sequence_number=0,
-                prev_state=chain_prev,
-                next_state_hash=chain_next,
+                prev_block_hash=chain_prev,
+                block_hash=chain_next,
                 audit_content_sha256=integrity_block.get("audit_content_sha256", file_hash),
                 entry_hash=ledger.get("events_hash", file_hash),
             )

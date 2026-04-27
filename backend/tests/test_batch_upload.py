@@ -76,7 +76,7 @@ def test_batch_report_generation(sample_valid_content, monkeypatch):
     from app.services import rim_wrapper
     from app.services import pdf_generator as pdf_generator_mod
 
-    def fake_run_rim_audit(file_path: str, prev_state=None, progress_callback=None):
+    def fake_run_rim_audit(file_path: str, chain_seed=None, progress_callback=None):
         return {
             "schema": rim_wrapper.EXPECTED_SCHEMA,
             "time_utc": "2026-01-01T00:00:00Z",
@@ -104,7 +104,7 @@ def test_batch_report_generation(sample_valid_content, monkeypatch):
                     "ano": False,
                 }
             ],
-            "ledger": {"events_hash": "e" * 64, "next_state_hash": "n" * 64},
+            "ledger": {"events_hash": "e" * 64},
             "integrity": {"audit_content_sha256": "i" * 64},
             "map_position": {
                 "k5": [0.0, 0.0, 0.0, 0.0, 0.0],

@@ -75,8 +75,8 @@ export interface EuAiActCompliance {
 export interface LedgerInfo {
   ledger_id: string;
   sequence_number: number;
-  prev_state?: string | null;
-  next_state_hash?: string | null;
+  prev_block_hash?: string | null;
+  block_hash?: string | null;
   audit_content_sha256: string;
   entry_hash: string;
 }
@@ -99,6 +99,8 @@ export interface ArtifactBlock {
   index: number;
   timestamp: string;
   artifact_hash: string;
+  pipeline_version?: string | null;
+  chain_seed_at_commit?: string | null;
   tau_vectors: number[];
   manifold_hash: string;
   tile_hash: string;

@@ -25,7 +25,7 @@ SERVER INTEGRATION (fastest path):
   from rim_os_v2 import build_genesis, audit_file
   genesis = build_genesis()                          # once at startup
   report  = audit_file(path, genesis=genesis)
-  db.store(report["ledger"]["next_state_hash"])      # blockchain entry
+  db.store(report["ledger"]["events_hash"])          # audit event digest
   api.return(report["summary"])                      # to frontend
 
 KEY AUDIT METRICS:
@@ -34,7 +34,7 @@ KEY AUDIT METRICS:
   report["summary"]["anomaly_fraction"]              → 0.0-1.0
   report["summary"]["requires_human_review"]         → bool
   report["chunks"][i]["manifold_hash"]               → position on M
-  report["ledger"]["next_state_hash"]                → blockchain anchor
+  report["ledger"]["events_hash"]                    → audit event digest
   report["integrity"]["audit_content_sha256"]        → deterministic file ID
 """
 
@@ -245,28 +245,6 @@ def ntt_fingerprint(residues: List[int], L: int = 1024) -> Dict[str, Any]:
         "L": n,
     }
 
-def kag_grid(mag64: List[int]) -> Dict[str, Any]:
-    """
-    8×8 KAG additive predictor on NTT magnitude vector.
-
-    NOTE (RIM-401 pending): per Reference Model §5, KAG must be a distillation to
-    scale-invariant directional invariants, not an additive decomposition. This is a legacy
-    placeholder maintained for API compatibility until the redesign lands.
-    """
-    G = 8; grid = [[mag64[y*G+x] for x in range(G)] for y in range(G)]
-    g_mean = sum(mag64) / 64
-    row_mean = [sum(grid[y]) / G for y in range(G)]
-    col_mean = [sum(grid[y][x] for y in range(G)) / G for x in range(G)]
-    resids = [abs(grid[y][x] - (row_mean[y] + col_mean[x] - g_mean))
-              for y in range(G) for x in range(G)]
-    mean_r = sum(resids) / len(resids)
-    sep = float(clamp01(1.0 - mean_r / (g_mean + 1e-6)))
-    kag_obj = {"grid": grid, "gmean": g_mean,
-               "row_means": row_mean, "col_means": col_mean,
-               "mean_abs_residual": mean_r, "separability": sep}
-    return {"kag_hash": canonical_hash(kag_obj), "separability": sep,
-            "chart": kag_obj}
-
 def kag_invariants(spec256: List[int]) -> Dict[str, Any]:
     """
     Ticket RIM-401: distill NTT spectrum to scale-invariant invariants.
@@ -343,21 +321,30 @@ def compute_k5_and_tau(kag_inv: Dict[str, Any], scale: float = 50.0) -> Tuple[Li
     tau = [float((u[i] + alphas[i]) % 1.0) for i in range(5)]
 
     return k5, tau
-def compute_k5(kag_chart: Dict[str, Any], scale: float = 50.0) -> List[float]:
-    """
-    KAG chart → k ∈ ℝ⁵ world coordinates on the Penrose field.
 
-    NOTE (RIM-402 pending): per Reference Model §6.3, k5 (lattice position) and τ (phase)
-    must be computed as independent parallel/perpendicular components from KAG invariants.
-    The current implementation derives k5 from the KAG 8×8 chart as a temporary placeholder.
+
+def _cascade_from_exponents(exponents: List[int], scale: float = 50.0) -> Dict[str, Any]:
     """
-    row_means = kag_chart["row_means"]
-    gmean = float(kag_chart["gmean"])
-    k5_raw = [int(row_means[r] - gmean) for r in range(5)]
-    max_k = max(abs(k) for k in k5_raw)
-    if max_k == 0:
-        return [0.0] * 5
-    return [float(k * scale / max_k) for k in k5_raw]
+    Shared Gödel-exponent cascade used by chunks, Genesis mints, and constant encoders.
+    """
+    exps = [int(exponents[i]) if i < len(exponents) else 0 for i in range(256)]
+    p = padic_lift(exps, k=3)
+    ntt = ntt_fingerprint(p["residues"], L=1024)
+    kag = kag_invariants(ntt["spec256"])
+    k5, tau5 = compute_k5_and_tau(kag, scale=scale)
+    til = penrose_patch(tau5, N=6, max_tiles=384)
+    return {
+        "exponents": exps,
+        "godel_hash": canonical_hash(exps),
+        "padic": p,
+        "ntt": ntt,
+        "kag": kag,
+        "k5": k5,
+        "tau_pentagrid": tau5,
+        "tiling": til,
+        "separability": float(clamp01(1.0 - kag["invariants"].get("dir_entropy", 0.5))),
+        "match_score": penrose_match_score(til),
+    }
 
 
 def k5_to_world_position(k5: List[float]) -> Tuple[float, float]:
@@ -368,21 +355,6 @@ def k5_to_world_position(k5: List[float]) -> Tuple[float, float]:
     x = sum(k5[r] * math.cos(2 * math.pi * r / 5) for r in range(5))
     y = sum(k5[r] * math.sin(2 * math.pi * r / 5) for r in range(5))
     return float(x), float(y)
-
-
-def _tau_pentagrid_from_k5(k5: List[float], scale: float = 50.0) -> List[float]:
-    """
-    Map k5 world coordinates to [0,1]⁵ pentagrid offsets for penrose_patch /
-    barycentric (backward compatible with legacy tau_pentagrid).
-
-    NOTE (RIM-402/RIM-403 pending): the Reference Model requires τ to carry the
-    perpendicular (phase) component of cut-and-project and NOT be derived from k5.
-    Additionally, clamping destroys injectivity; τ should be reduced mod 1 without clamp.
-    """
-    kk = (list(k5) + [0.0] * 5)[:5]
-    if max(abs(v) for v in kk) < 1e-15:
-        return [0.5] * 5
-    return [clamp01((kk[i] + scale) / (2.0 * scale)) for i in range(5)]
 
 def _intersect(ni, a, nj, b):
     det = ni[0]*nj[1] - ni[1]*nj[0]
@@ -696,9 +668,9 @@ def _godel_of_int(n: int) -> List[int]:
         if r == 1: break
     return exps
 
-def _const_to_tau5(value: float) -> List[float]:
+def _const_to_tau5(value: float) -> Tuple[List[float], List[float]]:
     """
-    Physical/mathematical constant → tau_pentagrid[0..4].
+    Physical/mathematical constant → (k5[0..4], tau_pentagrid[0..4]).
     Exact same Gödel→p-adic→NTT pipeline as chunk processing.
     This ensures constants and chunks live in the same coordinate space.
     """
@@ -707,12 +679,8 @@ def _const_to_tau5(value: float) -> List[float]:
     # Combined: difference of numerator/denominator exponent vectors
     # captures the rational structure of the constant
     g_comb  = [abs(gp[i] - gq[i]) for i in range(256)]
-    residues = padic_lift(g_comb, k=3)["residues"]
-    ntt      = ntt_fingerprint(residues, L=1024)
-    kag      = kag_grid(ntt["mag64"])
-    k5       = compute_k5(kag["chart"], scale=50.0)
-    tau5     = _tau_pentagrid_from_k5(k5, scale=50.0)
-    return tau5
+    cascade = _cascade_from_exponents(g_comb, scale=50.0)
+    return cascade["k5"], cascade["tau_pentagrid"]
 
 def _harmonic_mean_tau5(tau5_list: List[List[float]]) -> List[float]:
     """Combine multiple tau5 vectors via harmonic mean per dimension."""
@@ -725,6 +693,16 @@ def _harmonic_mean_tau5(tau5_list: List[List[float]]) -> List[float]:
             # fallback: arithmetic mean including zeros
             result.append(_mean([v[d] for v in tau5_list]))
     return result
+
+
+def _mean_k5(k5_list: List[List[float]]) -> List[float]:
+    """Combine k5 vectors by arithmetic mean per dimension."""
+    if not k5_list:
+        return [0.0] * 5
+    return [
+        float(_mean([v[d] for v in k5_list if len(v) > d]))
+        for d in range(5)
+    ]
 
 def build_genesis(extra_anchors: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
     """
@@ -742,16 +720,23 @@ def build_genesis(extra_anchors: Optional[Dict[str, float]] = None) -> Dict[str,
 
     def make_mint(keys: List[str], doi: str, title: str,
                   label: str) -> Dict[str, Any]:
-        tau5_list = [_const_to_tau5(anchors[k]) for k in keys if k in anchors]
+        cascades = [_const_to_tau5(anchors[k]) for k in keys if k in anchors]
+        k5_list = [k5 for k5, _tau5 in cascades]
+        tau5_list = [tau5 for _k5, tau5 in cascades]
+        k5        = _mean_k5(k5_list) if k5_list else [0.0]*5
         tau5      = _harmonic_mean_tau5(tau5_list) if tau5_list else [0.5]*5
         tw        = sum(tau5) / 5.0
+        wx, wy    = k5_to_world_position(k5)
         return {
             "label":          label,
+            "k5":             k5,
+            "world_x":        float(wx),
+            "world_y":        float(wy),
             "tau_pentagrid":  tau5,
             "tau_omega_norm": float(tw),
             "tau_omega":      {"tau_omega_norm": float(tw)},
-            "tile_hash":      canonical_hash({"tau5": tau5}),
-            "manifold_hash":  canonical_hash({"tau5": tau5, "doi": doi}),
+            "tile_hash":      canonical_hash({"tau5": tau5, "k5": k5}),
+            "manifold_hash":  canonical_hash({"tau5": tau5, "k5": k5, "doi": doi}),
             "separability":   float(tau5[0]),
             "match_score":    float(tw),
             "meta": {"keys": keys, "doi": doi, "title": title},
@@ -831,26 +816,27 @@ def encode_integer(n: int, genesis: List[Dict], label: str = "") -> Dict[str, An
     6=2×3 → combined exponent vector → between 2 and 3 on M.
     """
     exps     = _godel_of_int(n)
-    residues = padic_lift(exps, k=3)["residues"]
-    ntt      = ntt_fingerprint(residues, L=1024)
-    kag      = kag_grid(ntt["mag64"])
-    k5       = compute_k5(kag["chart"], scale=50.0)
-    tau5     = _tau_pentagrid_from_k5(k5, scale=50.0)
+    cascade  = _cascade_from_exponents(exps, scale=50.0)
+    k5       = cascade["k5"]
+    tau5     = cascade["tau_pentagrid"]
     tw       = sum(tau5) / 5.0
     bary     = _barycentric(tau5, genesis)
     chain    = {"padic_hash": padic_lift(exps,3)["padic_hash"],
-                "ntt_hash": ntt["spec_hash"],
-                "kag_hash": kag["kag_hash"],
-                "penrose_hash": penrose_patch(tau5)["tile_hash"]}
+                "ntt_hash": cascade["ntt"]["spec_hash"],
+                "kag_hash": cascade["kag"]["kag_hash"],
+                "penrose_hash": cascade["tiling"]["tile_hash"]}
     return {
         "label":          label or str(n),
         "input_int":      n,
+        "k5":             k5,
         "tau_pentagrid":  tau5,
         "tau_omega_norm": float(tw),
+        "tile_hash":      cascade["tiling"]["tile_hash"],
         "manifold_hash":  canonical_hash(chain),
         "barycentric":    bary,
         "manifold_region": _dominant_region(bary, genesis),
-        "separability":   kag["separability"],
+        "separability":   cascade["separability"],
+        "match_score":    cascade["match_score"],
     }
 
 def encode_text(text: str, genesis: List[Dict], label: str = "") -> Dict[str, Any]:
@@ -863,14 +849,18 @@ def encode_number(value: float, genesis: List[Dict],
     Float → position on M via rational approximation + Gödel.
     This is how Genesis Mints are built — consistent coordinate space.
     """
-    tau5 = _const_to_tau5(value)
+    k5, tau5 = _const_to_tau5(value)
     tw   = sum(tau5) / 5.0
     bary = _barycentric(tau5, genesis)
+    tile_hash = canonical_hash({"tau5": tau5, "k5": k5})
     return {
         "label":          label or str(value),
         "input_float":    value,
+        "k5":             k5,
         "tau_pentagrid":  tau5,
         "tau_omega_norm": float(tw),
+        "tile_hash":      tile_hash,
+        "manifold_hash":  canonical_hash({"tau5": tau5, "k5": k5, "input_float": value}),
         "barycentric":    bary,
         "manifold_region": _dominant_region(bary, genesis),
     }
@@ -1047,22 +1037,17 @@ def risk_level(score: int) -> str:
 # LEDGER CHAIN
 # ══════════════════════════════════════════════════════════════════
 
-def build_ledger(chunks: List[Dict],
-                 prev_state: Optional[str] = None) -> Dict[str, Any]:
+def build_ledger(chunks: List[Dict]) -> Dict[str, Any]:
     """
-    Build blockchain ledger entry for this audit.
-    next_state_hash = SHA256(prev_state + events_hash)
-    Store next_state_hash in DB to chain audits.
+    Build non-chain ledger metadata for this audit.
+
+    Chain linkage is handled only by backend.app.services.artifact_chain.
     """
     events_hash = sha256_hex(
         "".join(c.get("manifold_hash","") for c in chunks).encode())
     th_agg = sha256_hex(
         "".join(c.get("tile_hash","") for c in chunks).encode())
 
-    if prev_state is None:
-        prev_state = sha256_hex(("RIM_OS_GENESIS:" + events_hash).encode())
-
-    next_state = sha256_hex((prev_state + ":" + events_hash).encode())
     map_position = None
     if chunks:
         first = chunks[0]
@@ -1071,14 +1056,11 @@ def build_ledger(chunks: List[Dict],
             "first_chunk_manifold_hash": first.get("manifold_hash", ""),
             "tile_hash": first.get("tile_hash", ""),
             "tau": first.get("tau_pentagrid", []),
-            "prev_state": prev_state,
         }
 
     return {
         "events_hash":    events_hash,
         "th_aggregate":   th_agg,
-        "prev_state":     prev_state,
-        "next_state_hash": next_state,
         "map_position":   map_position,
     }
 
@@ -1126,7 +1108,6 @@ def parse_safetensors(path: str) -> Dict[str, Any]:
 def audit_file(path: str,
                genesis: Optional[Dict] = None,
                max_chunks: Optional[int] = None,
-               prev_state: Optional[str] = None,
                chain_seed: Optional[str] = None,
                progress_callback: Optional[Callable[[float], None]] = None) -> Dict[str, Any]:
     """
@@ -1219,7 +1200,7 @@ def audit_file(path: str,
     req_rev   = bool(ano_frac > 0.05 or rl == "HIGH" or bias_pen > 0.25)
     conform   = bool(rl != "HIGH" and not req_rev and bias_pen < 0.20)
 
-    ledger = build_ledger(chunks, prev_state)
+    ledger = build_ledger(chunks)
 
     # RIM-404: file-level position must be order-sensitive (trajectory aggregation), not mean.
     k5_avg: List[float] = [0.0] * 5
@@ -1349,8 +1330,7 @@ def _eu_ai_act_block(rl, score, req_rev, conform,
         "Art_11_docs":  {"pipeline": "Gödel→p-adic→NTT(GF 998244353)→KAG(8×8)→PenroseP3",
                           "schema": SCHEMA, "deterministic": True},
         "Art_12_ledger": {"events_hash": ledger["events_hash"],
-                           "next_state":  ledger["next_state_hash"],
-                           "chain_linkable": True},
+                           "chain_linkable": False},
         "Art_15_accuracy": {"anomaly_count": len(anomalies),
                              "bias_penalty": bias["bias_penalty_0_1"],
                              "conformity_passed": conform},
@@ -1394,7 +1374,6 @@ def write_svg(report: Dict, out_path: str,
     score      = int(summary.get("integrity_score_0_100", 0))
     risk       = summary.get("risk_level", "HIGH")
     hi_ent     = float(summary.get("avg_entropy_bits", 0))
-    next_state = ledger.get("next_state_hash", "")
     tile_hash  = chunks[0].get("tile_hash", "") if chunks else ""
 
     RISK_COL = {"LOW": "#2e7d32", "MEDIUM": "#e65100", "HIGH": "#c62828"}
@@ -1446,7 +1425,7 @@ def write_svg(report: Dict, out_path: str,
     for i, (lbl, val) in enumerate([
         ("audit_sha256",     audit_sha),
         ("tile_hash[0]",     tile_hash),
-        ("ledger_next_state",next_state),
+        ("events_hash",      ledger.get("events_hash", "")),
         (f"entropy_mean",    f"{hi_ent:.4f} bits/sym"),
         (f"chunks",          f"{len(chunks)}  anomalies={summary.get('anomaly_count',0)}"),
     ]):
@@ -1689,8 +1668,6 @@ def write_pdf(report: Dict, out_path: str,
     hash_rows = [
         ("audit_content_sha256",  integ.get("audit_content_sha256","—")),
         ("events_hash",           ledger.get("events_hash","—")),
-        ("prev_state_hash",       ledger.get("prev_state","—")),
-        ("next_state_hash",       ledger.get("next_state_hash","—")),
         ("genesis_frame_hash",    report.get("genesis_frame_hash","—")),
     ]
     h_data = [["Key","Value"]] + [[k,v] for k,v in hash_rows]
@@ -1708,8 +1685,7 @@ def write_pdf(report: Dict, out_path: str,
         ("BOTTOMPADDING",(0,0),(-1,-1),3),
     ]))
     story += [ht, sp(3),
-              Paragraph("Chain next audit: pass next_state_hash as prev_state "
-                        "in the next rim_os_v2 audit_file() call.", S["sm"])]
+              Paragraph("Artifact chain linkage is recorded by the backend artifact_chain module.", S["sm"])]
 
     # 6. EU AI Act
     story += [PageBreak(), Paragraph("6. EU AI Act Evidence (Reg. 2024/1689)", S["h1"]), hr()]
@@ -1831,18 +1807,16 @@ def run_selftest() -> Dict[str, Any]:
         results["process_clustering"] = f"FAIL: {e}"; ok = False
     print(f"  5/7 Process clustering → {results['process_clustering']}")
 
-    # 6. Ledger chain
+    # 6. Ledger metadata
     try:
         fake = [{"manifold_hash": "a"*64, "tile_hash": "b"*64}]
-        l1 = build_ledger(fake, None)
-        l2 = build_ledger(fake, l1["next_state_hash"])
-        l3 = build_ledger(fake, l2["next_state_hash"])
-        states = {l1["next_state_hash"], l2["next_state_hash"], l3["next_state_hash"]}
-        assert len(states) == 3
-        results["ledger"] = f"PASS  l1={l1['next_state_hash'][:12]}…  chain_length=3"
+        ledger = build_ledger(fake)
+        assert len(ledger["events_hash"]) == 64
+        assert len(ledger["th_aggregate"]) == 64
+        results["ledger"] = f"PASS  events={ledger['events_hash'][:12]}..."
     except Exception as e:
         results["ledger"] = f"FAIL: {e}"; ok = False
-    print(f"  6/7 Ledger chain   → {results['ledger']}")
+    print(f"  6/7 Ledger metadata → {results['ledger']}")
 
     # 7. Barycentric stability
     try:
@@ -1885,7 +1859,6 @@ def main(argv=None):
     pa.add_argument("--out-svg", default=None)
     pa.add_argument("--out-pdf", default=None)
     pa.add_argument("--max-chunks", type=int, default=None)
-    pa.add_argument("--prev-state", default=None)
     pa.add_argument("--model-name", default="Unknown Model")
 
     pe = sub.add_parser("encode", help="Encode text/file to position on M")
@@ -1913,8 +1886,7 @@ def main(argv=None):
     if args.cmd == "audit":
         genesis = build_genesis()
         report  = audit_file(args.in_path, genesis=genesis,
-                             max_chunks=args.max_chunks,
-                             prev_state=args.prev_state)
+                             max_chunks=args.max_chunks)
         out_json = args.out_json or args.in_path.replace(".safetensors","") + "_audit.json"
         with open(out_json,"w") as f:
             json.dump(report, f, indent=2, default=str)

@@ -391,8 +391,8 @@ async def upload_audit_file(
         ledger_info = LedgerInfo(
             ledger_id="RIM-OS-LEDGER",
             sequence_number=0,
-            prev_state=chain_prev,
-            next_state_hash=chain_next,
+            prev_block_hash=chain_prev,
+            block_hash=chain_next,
             audit_content_sha256=integrity_block.get("audit_content_sha256", file_hash),
             entry_hash=ledger.get("events_hash", file_hash),
         )

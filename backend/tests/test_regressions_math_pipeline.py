@@ -1,8 +1,11 @@
+import os
+import tempfile
+
 from app.models.metadata_schemas import ArtifactFormat
 from app.services import rim_wrapper
 from app.services.metadata_parser import detect_format
 from app.utils.penrose import extract_penrose_from_report
-from rim_os_v2 import compute_k5_and_tau, kag_invariants, k5_to_world_position
+from rim_os_v2 import audit_file, build_genesis, compute_k5_and_tau, kag_invariants, k5_to_world_position
 
 
 def test_compute_k5_and_tau_pentagrid_are_deterministic_spectral():
@@ -17,8 +20,46 @@ def test_compute_k5_and_tau_pentagrid_are_deterministic_spectral():
     assert isinstance(x, float) and isinstance(y, float)
 
 
+def test_build_genesis_is_deterministic_and_non_degenerate():
+    first = build_genesis()
+    second = build_genesis()
+
+    assert first == second
+    for mint in first["genesis_mints"]:
+        tau = mint["tau_pentagrid"]
+        assert len(tau) == 5
+        assert len({round(v, 12) for v in tau}) > 1
+        assert any(0.0 < v < 1.0 for v in tau)
+        assert len(mint["k5"]) == 5
+
+
+def test_audit_barycentric_profiles_vary_against_unified_genesis():
+    genesis = build_genesis()
+
+    def _audit_bytes(content: bytes):
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".bin")
+        try:
+            tmp.write(content)
+            tmp.close()
+            return audit_file(tmp.name, genesis=genesis, max_chunks=1)
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
+    first = _audit_bytes(bytes(range(256)) * 4)
+    second = _audit_bytes(bytes(reversed(range(256))) * 4)
+
+    first_bary = first["map_position"]["barycentric"]
+    second_bary = second["map_position"]["barycentric"]
+    assert len(first_bary) == 3
+    assert len(second_bary) == 3
+    assert first_bary != second_bary
+
+
 def test_run_rim_audit_accepts_nested_genesis_frame_hash(monkeypatch):
-    def fake_audit_file(file_path, genesis, prev_state, progress_callback):
+    def fake_audit_file(file_path, genesis, progress_callback):
         return {
             "schema": rim_wrapper.EXPECTED_SCHEMA,
             "genesis": {"frame_hash": rim_wrapper.GENESIS_FRAME_HASH},
@@ -45,7 +86,7 @@ def test_extract_penrose_prefers_first_chunk_tile_hash():
                 "tau_pentagrid": [0.1, 0.2, 0.3, 0.4, 0.5],
             }
         ],
-        "ledger": {"next_state_hash": "n" * 64},
+        "ledger": {"events_hash": "e" * 64},
         "integrity": {"audit_content_sha256": "i" * 64},
     }
 

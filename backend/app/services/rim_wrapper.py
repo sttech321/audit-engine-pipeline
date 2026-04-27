@@ -28,7 +28,6 @@ GENESIS_FRAME_HASH: str = GENESIS.get("frame_hash", "")
 
 def run_rim_audit(
     file_path: str,
-    prev_state: Optional[str] = None,
     chain_seed: Optional[str] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> Dict[str, Any]:
@@ -39,9 +38,8 @@ def run_rim_audit(
     implementation provided by the RIM-OS client engine.
 
     Ledger dependency:
-        - Each audit produces a `ledger.next_state_hash` value.
-        - Backends must persist this hash and pass it back as `prev_state`
-          on the next audit to obtain an append-only, chain-linkable ledger.
+        - Artifact chain linkage is produced by app.services.artifact_chain
+          after a successful audit. The RIM engine only emits audit metadata.
 
     Genesis immutability:
         - Genesis is constructed once at module import via `build_genesis()`.
@@ -57,9 +55,6 @@ def run_rim_audit(
 
     Args:
         file_path: Absolute path to the binary file to audit.
-        prev_state: Optional previous ledger state hash. When provided, the
-            resulting `ledger.next_state_hash` will extend the existing chain.
-
     Returns:
         The full RIM-OS audit report dictionary as returned by `audit_file`.
 
@@ -80,7 +75,6 @@ def run_rim_audit(
         report = audit_file(
             file_path,
             genesis=GENESIS,
-            prev_state=prev_state,
             chain_seed=chain_seed,
             progress_callback=progress_callback,
         )
@@ -89,7 +83,6 @@ def run_rim_audit(
         report = audit_file(
             file_path,
             genesis=GENESIS,
-            prev_state=prev_state,
             progress_callback=progress_callback,
         )
     audit_time = time.time() - t_start
@@ -144,7 +137,7 @@ def extract_kpis_from_report(report: Dict[str, Any]) -> Dict[str, Any]:
         - anomaly_fraction      → anomaly_fraction
         - avg_kag_separability  → kag_score
         - avg_penrose_match     → penrose_match
-        - next_state_hash       → ledger_anchor
+        - events_hash           → ledger_anchor
         - audit_content_sha256  → file_identity
 
     The mapping is intentionally shallow: the RIM-OS report format remains the
@@ -161,7 +154,7 @@ def extract_kpis_from_report(report: Dict[str, Any]) -> Dict[str, Any]:
         "anomaly_fraction": summary.get("anomaly_fraction"),
         "kag_score": summary.get("avg_kag_separability"),
         "penrose_match": summary.get("avg_penrose_match"),
-        "ledger_anchor": ledger.get("next_state_hash"),
+        "ledger_anchor": ledger.get("events_hash"),
         "file_identity": integrity.get("audit_content_sha256"),
     }
 

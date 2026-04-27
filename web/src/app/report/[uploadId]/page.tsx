@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import axios from "axios";
@@ -148,7 +149,7 @@ const Section = ({
   description?: string;
   children: React.ReactNode;
 }) => (
-  <section className="rounded-[2rem] border border-white/8 bg-slate-950/60 p-8 backdrop-blur shadow-xl shadow-black/30">
+  <section className="rounded-4xl border border-white/8 bg-slate-950/60 p-8 backdrop-blur shadow-xl shadow-black/30">
     <div className="mb-6">
       <h2 className="text-xl font-semibold text-white">{title}</h2>
       {description && (
@@ -247,7 +248,7 @@ export default function ReportPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to Upload
           </Link>
-          <div className="mt-8 rounded-[2rem] border border-red-500/30 bg-red-500/8 p-8 backdrop-blur">
+          <div className="mt-8 rounded-4xl border border-red-500/30 bg-red-500/8 p-8 backdrop-blur">
             <div className="flex items-start gap-3 text-red-300">
               <TriangleAlert className="w-5 h-5 mt-0.5 shrink-0" />
               <div>
@@ -501,7 +502,7 @@ export default function ReportPage() {
         </Section>
 
         {/* ── Hero / title panel ── */}
-        <section className="rounded-[2rem] glass p-8 shadow-2xl shadow-black/40">
+        <section className="rounded-4xl glass p-8 shadow-2xl shadow-black/40">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-sky-400/30 bg-sky-400/8 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">
@@ -548,7 +549,7 @@ export default function ReportPage() {
 
         {/* ── Verification result banner ── */}
         <section
-          className={`rounded-[2rem] border p-8 backdrop-blur ${tone.border} ${tone.bg}`}
+          className={`rounded-4xl border p-8 backdrop-blur ${tone.border} ${tone.bg}`}
         >
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-4">
@@ -685,9 +686,12 @@ export default function ReportPage() {
                   This visualization helps you inspect the structural signature
                   produced by the deterministic audit.
                 </p>
-                <img
+                <Image
                   src={`${API_URL}/api/report/${uploadId}/svg`}
                   alt="Penrose map visualization"
+                  width={800}
+                  height={800}
+                  unoptimized
                   className="w-full rounded-xl border border-white/6 bg-slate-950/60"
                 />
               </div>
@@ -717,14 +721,14 @@ export default function ReportPage() {
                         {report.ledger.entry_hash}
                       </p>
                     </InfoTile>
-                    <InfoTile label="Next State Hash">
+                    <InfoTile label="Block Hash">
                       <p className="break-all font-mono text-xs text-slate-400">
-                        {report.ledger.next_state_hash || "Not available"}
+                        {report.ledger.block_hash || "Not available"}
                       </p>
                     </InfoTile>
-                    <InfoTile label="Previous State">
+                    <InfoTile label="Previous Block Hash">
                       <p className="break-all font-mono text-xs text-slate-400">
-                        {report.ledger.prev_state || "Genesis-linked origin"}
+                        {report.ledger.prev_block_hash || "Genesis-linked origin"}
                       </p>
                     </InfoTile>
                     <InfoTile label="Audit Content SHA-256">
@@ -877,7 +881,7 @@ export default function ReportPage() {
                   >
                     {signatureStatus}
                   </p>
-                  <p className="mt-2 text-xs text-slate-500 break-words">
+                  <p className="mt-2 text-xs text-slate-500 wrap-break-word">
                     {signatureCheck || "No signature check in report payload."}
                   </p>
                 </div>
@@ -1244,8 +1248,8 @@ export default function ReportPage() {
       </main>
 
       {euAiFull && isEuPayloadOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-5xl rounded-[2rem] border border-white/10 bg-slate-950 shadow-2xl shadow-black/50">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-5xl rounded-4xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/50">
             <div className="flex items-center justify-between gap-4 border-b border-white/8 px-6 py-5">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">

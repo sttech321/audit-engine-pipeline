@@ -2,12 +2,9 @@
 Extract Penrose visualization parameters from RIM-OS audit report.
 
 Each audit produces a unique, deterministic Penrose fingerprint derived from
-the first chunk's manifold geometry and the ledger state.
+the first chunk's manifold geometry and artifact-chain state.
 """
 from typing import Any, Dict, List
-
-from rim_os_v2 import _tau_pentagrid_from_k5
-
 
 def extract_penrose_from_report(report: Dict[str, Any], fallback_hash: str = "") -> Dict[str, Any]:
     """
@@ -32,17 +29,15 @@ def extract_penrose_from_report(report: Dict[str, Any], fallback_hash: str = "")
     if isinstance(tau_pent, list) and len(tau_pent) >= 5:
         tau_vectors: List[float] = [float(tau_pent[i]) for i in range(5)]
     else:
-        tau_vectors = _tau_pentagrid_from_k5(k5, scale=50.0)
+        tau_vectors = [0.5] * 5
 
     barycentric = first_chunk.get("barycentric", [0.0, 0.0, 0.0])
     if not isinstance(barycentric, list):
         barycentric = [0.0, 0.0, 0.0]
 
-    ledger = report.get("ledger", {}) or {}
     integrity = report.get("integrity", {}) or {}
-    # RIM-205: pipeline-level next_state_hash is being phased out; prefer artifact_chain linkage.
     artifact_block = report.get("artifact_block", {}) or {}
-    next_state = artifact_block.get("block_hash") or ledger.get("next_state_hash") or fallback_hash
+    block_hash = artifact_block.get("block_hash") or fallback_hash
     manifold_hash = (first_chunk.get("manifold_hash")
                      or integrity.get("audit_content_sha256", ""))
 
@@ -56,7 +51,7 @@ def extract_penrose_from_report(report: Dict[str, Any], fallback_hash: str = "")
         "barycentric": barycentric,
         "penrose_hash": manifold_hash,
         "tile_hash": (first_chunk.get("tile_hash")
-                      or (next_state[:16] if next_state else "")),
+                      or (block_hash[:16] if block_hash else "")),
         "tau_vectors": tau_vectors,
         # Legacy / chart-style API
         "r": tau_omega,
