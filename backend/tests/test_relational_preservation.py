@@ -47,15 +47,29 @@ def test_order_sensitivity_positions_differ(tmp_path):
     assert (r1.get("map_position") or {}).get("k5") != (r2.get("map_position") or {}).get("k5")
 
 
-def test_amplitude_bound_same_input_seed_variation_is_small(tmp_path):
+def test_position_independent_of_chain_seed(tmp_path):
+    """Reference Model v1.3 §8.4 (Option 3): positions on the manifold are
+    absolute. The same input audited under different chain_seed values must
+    produce a bit-identical map_position. chain_seed is still accepted by
+    audit_file (it is threaded to downstream SVG rendering and stored as
+    chain_seed_at_commit on the chain block), but it must not influence k5,
+    world_x, world_y, tau_vectors, barycentric, manifold_hash, or tile_hash.
+    """
     g = build_genesis()
     p = tmp_path / "x.bin"
     p.write_bytes(bytes(range(128)))
     r1 = audit_file(str(p), genesis=g, max_chunks=1, chain_seed="seedA")
     r2 = audit_file(str(p), genesis=g, max_chunks=1, chain_seed="seedB")
+    r3 = audit_file(str(p), genesis=g, max_chunks=1, chain_seed=None)
     mp1 = r1.get("map_position") or {}
     mp2 = r2.get("map_position") or {}
-    dx = float(mp1.get("world_x", 0.0)) - float(mp2.get("world_x", 0.0))
-    dy = float(mp1.get("world_y", 0.0)) - float(mp2.get("world_y", 0.0))
-    assert (dx * dx + dy * dy) ** 0.5 <= 0.25
+    mp3 = r3.get("map_position") or {}
+    assert mp1 == mp2
+    assert mp1 == mp3
+    for key in ("k5", "tau_vectors", "world_x", "world_y",
+                "barycentric", "manifold_hash", "tile_hash"):
+        assert mp1.get(key) == mp2.get(key) == mp3.get(key), (
+            f"map_position[{key!r}] varied across chain_seeds: "
+            f"{mp1.get(key)!r} vs {mp2.get(key)!r} vs {mp3.get(key)!r}"
+        )
 

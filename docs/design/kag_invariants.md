@@ -1,6 +1,6 @@
 ## KAG invariants (RIM-401) — design note
 
-### Goal (Reference Model v1.2 §5)
+### Goal (Reference Model v1.3 §5)
 KAG is **not** a projection or a statistical decomposition. It is a **distillation to invariants**:
 scale-invariant, directionally meaningful descriptors of the microscope body (Gödel→p-adic→NTT),
 with redundancy removed.

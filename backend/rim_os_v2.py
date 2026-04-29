@@ -1253,19 +1253,14 @@ def audit_file(path: str,
         manifold_hash = ""
         tile_hash = ""
 
-    # RIM-501: amplitude-bounded convergence (seed-aware position).
-    # Internal structure (tau_vectors, barycentric) must remain invariant; we only apply
-    # a small bounded drift to k5/world position derived from chain_seed.
-    if chain_seed and chunks:
-        import hashlib as _hashlib
-        h = _hashlib.sha256(f"{chain_seed}|{manifold_hash}".encode("utf-8")).digest()
-        # 5D drift direction in [-1,1]
-        v = [((h[i] / 255.0) * 2.0 - 1.0) for i in range(5)]
-        norm = math.sqrt(sum(x * x for x in v)) or 1.0
-        v = [x / norm for x in v]
-        eps_pos = 0.20  # default ε_position (empirical; see Reference §8.4)
-        k5_avg = [k5_avg[i] + v[i] * eps_pos for i in range(5)]
-        wx_map, wy_map = k5_to_world_position(k5_avg)
+    # Reference Model v1.3 §8.4 (Option 3): positions on the manifold are absolute.
+    # Old commits do not drift under new commits. The chain_seed is intentionally
+    # NOT used to perturb k5/world position here. It continues to be threaded
+    # through to downstream consumers (chain_seed_at_commit storage, SVG render
+    # seed via RIM-203-FINAL); audit_file itself keeps positions as a pure
+    # function of (input, genesis, trajectory) so the same artifact audited at
+    # any later time produces a bit-identical map_position.
+    _ = chain_seed  # accepted for API stability; see §8.4 v1.3.
 
     map_position = {
         "tau_vectors": tau_vectors,

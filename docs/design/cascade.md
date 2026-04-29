@@ -1,6 +1,6 @@
 ## Cascade: split into k5 (parallel) and τ (perpendicular) (RIM-402/403) — design note
 
-### Goal (Reference Model v1.2 §6.3)
+### Goal (Reference Model v1.3 §6.3)
 The cascade must produce **two independent objects**:
 - **k5**: lattice position (parallel component)
 - **τ**: phase offsets (perpendicular component)
